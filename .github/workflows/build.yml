@@ -1,0 +1,80 @@
+name: Compilar TelaRec (Windows)
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write   # necessário para criar a Release
+
+jobs:
+  build:
+    runs-on: windows-latest
+    env:
+      DOTNET_NOLOGO: "true"
+      DOTNET_CLI_TELEMETRY_OPTOUT: "true"
+      FFMPEG_URL: https://github.com/GyanD/codexffmpeg/releases/download/7.1.1/ffmpeg-7.1.1-essentials_build.zip
+
+    steps:
+      - name: Baixar o código
+        uses: actions/checkout@v4
+
+      - name: Instalar .NET 8 SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Testes unitários (informativo)
+        continue-on-error: true
+        run: dotnet test tests/TelaRec.Tests/TelaRec.Tests.csproj -c Release
+
+      - name: Baixar FFmpeg e embutir no executável
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Invoke-WebRequest -Uri $env:FFMPEG_URL -OutFile ffmpeg.zip
+          Expand-Archive ffmpeg.zip -DestinationPath ffmpeg_tmp
+          $exe = Get-ChildItem ffmpeg_tmp -Recurse -Filter ffmpeg.exe | Select-Object -First 1
+          if (-not $exe) { throw 'ffmpeg.exe não encontrado no pacote baixado.' }
+          Write-Host ('SHA256 do ffmpeg.exe: ' + (Get-FileHash $exe.FullName -Algorithm SHA256).Hash)
+          New-Item -ItemType Directory -Force -Path 'src/TelaRec.App/Resources' | Out-Null
+          $dest = 'src/TelaRec.App/Resources/ffmpeg.exe.gz'
+          $in  = [IO.File]::OpenRead($exe.FullName)
+          $out = [IO.File]::Create($dest)
+          $gz  = New-Object IO.Compression.GZipStream($out, [IO.Compression.CompressionLevel]::Optimal)
+          $in.CopyTo($gz)
+          $gz.Dispose(); $out.Dispose(); $in.Dispose()
+          Write-Host ('Embutido: ' + [math]::Round((Get-Item $dest).Length / 1MB, 1) + ' MB (compactado)')
+
+      - name: Publicar executável único (win-x64, autocontido)
+        run: >
+          dotnet publish src/TelaRec.App/TelaRec.App.csproj -c Release -r win-x64 --self-contained true
+          -p:PublishSingleFile=true -p:Version=1.0.${{ github.run_number }} -o publish
+
+      - name: Conferir resultado
+        shell: pwsh
+        run: |
+          Get-ChildItem publish | Format-Table Name, Length
+          if (-not (Test-Path publish/TelaRec.exe)) { throw 'TelaRec.exe não foi gerado.' }
+          if ((Get-Item publish/TelaRec.exe).Length -lt 40MB) { throw 'TelaRec.exe parece não conter o FFmpeg embutido.' }
+
+      - name: Enviar artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: TelaRec-win-x64
+          path: publish/TelaRec.exe
+          if-no-files-found: error
+
+      - name: Publicar Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || format('build-{0}', github.run_number) }}
+          name: ${{ github.ref_type == 'tag' && github.ref_name || format('Compilação {0}', github.run_number) }}
+          target_commitish: ${{ github.sha }}
+          prerelease: ${{ github.ref_type != 'tag' }}
+          files: publish/TelaRec.exe
+          body: |
+            Executável portátil do TelaRec para Windows 10/11 (x64). Baixe `TelaRec.exe` e execute — não precisa instalar nada.
+            Este programa inclui o FFmpeg (GPL). Veja THIRD_PARTY_LICENSES.md.
