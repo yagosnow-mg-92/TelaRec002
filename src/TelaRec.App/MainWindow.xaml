@@ -1,0 +1,280 @@
+<Window x:Class="TelaRec.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="TelaRec" Icon="Assets/icon.ico" Width="900" Height="760" MinWidth="720" MinHeight="620"
+        Background="{StaticResource Bg}" Foreground="{StaticResource Text}"
+        FontFamily="Segoe UI" FontSize="14" WindowStartupLocation="CenterScreen">
+    <Grid Margin="26">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
+
+        <!-- Cabeçalho: estado + cronômetro -->
+        <Grid Grid.Row="0">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Ellipse x:Name="StatusDot" Width="14" Height="14" Fill="{StaticResource Green}" VerticalAlignment="Center"/>
+                <TextBlock x:Name="StatusText" Text="Pronto para gravar" FontSize="17" FontWeight="SemiBold"
+                           Margin="12,0,0,0" VerticalAlignment="Center"/>
+            </StackPanel>
+            <TextBlock x:Name="TimerText" Text="00:00:00" FontSize="42" FontWeight="Light"
+                       FontFamily="Consolas" HorizontalAlignment="Right"/>
+        </Grid>
+
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" Margin="0,20,0,0">
+            <StackPanel Margin="0,0,10,0">
+
+                <TextBlock Text="TELA A GRAVAR" Foreground="{StaticResource Muted}" FontSize="12" FontWeight="SemiBold" Margin="2,0,0,8"/>
+                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1"
+                        CornerRadius="14" Padding="16">
+                    <StackPanel>
+                        <Grid x:Name="LayoutHost" Height="250" SizeChanged="LayoutHost_SizeChanged">
+                            <Canvas x:Name="MonitorCanvas"/>
+                        </Grid>
+                        <Grid Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock x:Name="SelectedInfo" FontWeight="SemiBold"/>
+                                <TextBlock x:Name="SelectedInfo2" Foreground="{StaticResource Muted}" FontSize="12" Margin="0,2,0,0"/>
+                            </StackPanel>
+                            <Button x:Name="RefreshButton" Content="Atualizar lista" Style="{StaticResource GhostBtn}"
+                                    Height="34" MinWidth="120" FontSize="13" HorizontalAlignment="Right"
+                                    VerticalAlignment="Center" Click="RefreshButton_Click"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="CONFIGURAÇÕES" Foreground="{StaticResource Muted}" FontSize="12" FontWeight="SemiBold" Margin="2,20,0,8"/>
+                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1"
+                        CornerRadius="14" Padding="16">
+                    <Grid x:Name="SettingsPanel">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="150"/>
+                            <ColumnDefinition Width="*"/>
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                        </Grid.RowDefinitions>
+
+                        <TextBlock Grid.Row="0" Text="Pasta de destino" VerticalAlignment="Center" Margin="0,0,0,12"/>
+                        <Grid Grid.Row="0" Grid.Column="1" Margin="0,0,0,12">
+                            <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                            <TextBox x:Name="FolderBox" Background="{StaticResource Surface2}" Foreground="{StaticResource Text}"
+                                     BorderBrush="{StaticResource Border}" CaretBrush="White" Padding="8,7"/>
+                            <Button Grid.Column="1" x:Name="BrowseButton" Content="Procurar…" Style="{StaticResource GhostBtn}"
+                                    Height="34" MinWidth="100" FontSize="13" Margin="8,0,0,0" Click="BrowseButton_Click"/>
+                        </Grid>
+
+                        <TextBlock Grid.Row="1" Text="Nome do arquivo" VerticalAlignment="Center" Margin="0,0,0,12"/>
+                        <TextBox Grid.Row="1" Grid.Column="1" x:Name="NameBox" Margin="0,0,0,12"
+                                 Background="{StaticResource Surface2}" Foreground="{StaticResource Text}"
+                                 BorderBrush="{StaticResource Border}" CaretBrush="White" Padding="8,7"
+                                 ToolTip="Deixe em branco para usar data e hora automaticamente"/>
+
+                        <TextBlock Grid.Row="2" Text="Taxa de quadros" VerticalAlignment="Center" Margin="0,0,0,12"/>
+                        <StackPanel Grid.Row="2" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,12">
+                            <RadioButton x:Name="Fps30" GroupName="fps" Content="30 FPS" Style="{StaticResource PillRadio}"/>
+                            <RadioButton x:Name="Fps60" GroupName="fps" Content="60 FPS" Style="{StaticResource PillRadio}"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="3" Text="Qualidade" VerticalAlignment="Center" Margin="0,0,0,12"/>
+                        <StackPanel Grid.Row="3" Grid.Column="1" Orientation="Horizontal" Margin="0,0,0,12">
+                            <RadioButton x:Name="QEco" GroupName="q" Content="Econômica" Style="{StaticResource PillRadio}"/>
+                            <RadioButton x:Name="QBal" GroupName="q" Content="Equilibrada" Style="{StaticResource PillRadio}"/>
+                            <RadioButton x:Name="QHigh" GroupName="q" Content="Alta" Style="{StaticResource PillRadio}"/>
+                        </StackPanel>
+
+                        <TextBlock Grid.Row="4" Text="Opções" VerticalAlignment="Top" Margin="0,2,0,0"/>
+                        <StackPanel Grid.Row="4" Grid.Column="1">
+                            <CheckBox x:Name="HwCheck" Content="Usar aceleração por hardware quando disponível" Foreground="{StaticResource Text}" Margin="0,0,0,6"/>
+                            <CheckBox x:Name="HideCheck" Content="Esconder esta janela da gravação" Foreground="{StaticResource Text}" Margin="0,0,0,6"/>
+                            <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
+                                <CheckBox x:Name="ClickFxCheck" VerticalAlignment="Center" Foreground="{StaticResource Text}"
+                                          Content="Efeito de clique do mouse"
+                                          ToolTip="Mostra um círculo colorido no ponto de cada clique (azul = esquerdo, laranja = direito)"/>
+                                <Button x:Name="ClickHelpButton" Content="?" Style="{StaticResource HelpBtn}" Margin="10,0,0,0"
+                                        ToolTip="Como funciona o efeito de clique" Click="ClickHelpButton_Click"/>
+                                <Popup x:Name="ClickHelpPopup" PlacementTarget="{Binding ElementName=ClickHelpButton}"
+                                       Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                                    <Border Background="{StaticResource Surface2}" BorderBrush="{StaticResource Accent}"
+                                            BorderThickness="1" CornerRadius="12" Padding="16" Width="360" Margin="0,6,14,14"
+                                            TextElement.Foreground="{StaticResource Text}">
+                                        <StackPanel>
+                                            <TextBlock Text="Efeito de clique" FontWeight="SemiBold" FontSize="15"/>
+                                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" Margin="0,6,0,12"
+                                                       Text="Desenha um círculo animado no ponto exato de cada clique. Ele aparece no vídeo gravado."/>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,8">
+                                                <Ellipse Width="18" Height="18" Fill="#2F9BFF" Stroke="White" StrokeThickness="1.5" VerticalAlignment="Top"/>
+                                                <TextBlock Margin="10,0,0,0" TextWrapping="Wrap" Width="290">
+                                                    <Run FontWeight="SemiBold" Text="Botão esquerdo: "/><Run Text="círculo AZUL e som de clique agudo."/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,0,0,12">
+                                                <Ellipse Width="18" Height="18" Fill="#FF8A1F" Stroke="White" StrokeThickness="1.5" VerticalAlignment="Top"/>
+                                                <TextBlock Margin="10,0,0,0" TextWrapping="Wrap" Width="290">
+                                                    <Run FontWeight="SemiBold" Text="Botão direito: "/><Run Text="círculo LARANJA e som de clique mais grave."/>
+                                                </TextBlock>
+                                            </StackPanel>
+                                            <TextBlock TextWrapping="Wrap" Foreground="{StaticResource Muted}" FontSize="12"
+                                                       Text="• Só aparece no monitor que está sendo gravado.&#10;• O som do clique só entra no vídeo se &quot;Gravar o som do computador&quot; estiver ligado.&#10;• Cliques feitos durante a pausa não aparecem."/>
+                                        </StackPanel>
+                                    </Border>
+                                </Popup>
+                            </StackPanel>
+                            <CheckBox x:Name="ClickSoundCheck" Content="Tocar som ao clicar" Foreground="{StaticResource Text}" Margin="24,0,0,6"/>
+                            <TextBlock x:Name="EncoderInfo" Foreground="{StaticResource Muted}" FontSize="12" Text=""/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <TextBlock Text="ÁUDIO" Foreground="{StaticResource Muted}" FontSize="12" FontWeight="SemiBold" Margin="2,20,0,8"/>
+                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1"
+                        CornerRadius="14" Padding="16">
+                    <StackPanel x:Name="AudioPanel">
+
+                        <CheckBox x:Name="SysAudioCheck" Click="AudioOption_Click" Foreground="{StaticResource Text}"
+                                  Content="Gravar o som do computador (saída de áudio)"/>
+                        <TextBlock Text="Grava tudo o que toca nas caixas ou fones: vídeos, reuniões, músicas…"
+                                   Foreground="{StaticResource Muted}" FontSize="12" Margin="24,2,0,8" TextWrapping="Wrap"/>
+                        <StackPanel x:Name="SysOptions" Orientation="Horizontal" Margin="24,0,0,6" Visibility="Collapsed">
+                            <TextBlock Text="Volume" VerticalAlignment="Center" Width="70"/>
+                            <Slider x:Name="SysGainSlider" Minimum="0" Maximum="200" Value="100" Width="220" VerticalAlignment="Center"/>
+                            <TextBlock x:Name="SysGainText" Text="100%" Width="50" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                        </StackPanel>
+
+                        <Rectangle Height="1" Fill="{StaticResource Border}" Margin="0,10,0,12"/>
+
+                        <CheckBox x:Name="MicCheck" Click="AudioOption_Click" Foreground="{StaticResource Text}"
+                                  Content="Gravar o microfone"/>
+                        <StackPanel x:Name="MicOptions" Margin="24,8,0,0" Visibility="Collapsed">
+                            <Grid Margin="0,0,0,6">
+                                <TextBlock Text="Escolha o microfone" VerticalAlignment="Center"/>
+                                <Button x:Name="RefreshMicsButton" Content="Detectar microfones" Style="{StaticResource GhostBtn}"
+                                        Height="30" MinWidth="150" FontSize="12" HorizontalAlignment="Right" Margin="0"
+                                        Click="RefreshMicsButton_Click"/>
+                            </Grid>
+                            <ListBox x:Name="MicList" Height="96" DisplayMemberPath="Label" ItemContainerStyle="{StaticResource MicItem}"
+                                     Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border}"
+                                     Foreground="{StaticResource Text}" SelectionChanged="MicList_SelectionChanged"/>
+
+                            <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
+                                <TextBlock Text="Captação" VerticalAlignment="Center" Width="70"/>
+                                <Slider x:Name="MicGainSlider" Minimum="0" Maximum="300" Value="100" Width="220" VerticalAlignment="Center"/>
+                                <TextBlock x:Name="MicGainText" Text="100%" Width="50" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+
+                            <Grid Margin="0,12,0,0">
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Button x:Name="MicTestButton" Content="Testar microfone" Style="{StaticResource GhostBtn}"
+                                        Height="32" MinWidth="150" FontSize="13" Margin="0,0,12,0" Click="MicTestButton_Click"/>
+                                <ProgressBar Grid.Column="1" x:Name="MicMeter" Minimum="0" Maximum="1" Height="12" VerticalAlignment="Center"
+                                             Foreground="{StaticResource Green}" Background="{StaticResource Surface2}"
+                                             BorderBrush="{StaticResource Border}"/>
+                            </Grid>
+                            <TextBlock x:Name="MicTestHint" Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,6,0,0"
+                                       Text="Clique em &quot;Testar microfone&quot; e fale: a barra deve se mexer."/>
+
+                            <CheckBox x:Name="DenoiseCheck" Click="AudioOption_Click" Foreground="{StaticResource Text}" Margin="0,14,0,0"
+                                      Content="Reduzir ruído do microfone"/>
+                            <StackPanel x:Name="DenoiseOptions" Orientation="Horizontal" Margin="24,8,0,0" IsEnabled="False">
+                                <RadioButton x:Name="DnLow" GroupName="dn" Content="Leve" Style="{StaticResource PillRadio}" Click="DenoiseLevel_Click"/>
+                                <RadioButton x:Name="DnMed" GroupName="dn" Content="Média" Style="{StaticResource PillRadio}" Click="DenoiseLevel_Click"/>
+                                <RadioButton x:Name="DnHigh" GroupName="dn" Content="Forte" Style="{StaticResource PillRadio}" Click="DenoiseLevel_Click"/>
+                            </StackPanel>
+                            <TextBlock Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="24,6,0,0"
+                                       Text="Corta o chiado e o ruído de fundo nos momentos em que você não está falando. Não remove ruído enquanto você fala. Use o teste acima para ouvir/ver o efeito."/>
+                        </StackPanel>
+
+                        <StackPanel x:Name="SyncPanel" Margin="0,14,0,0" Visibility="Collapsed">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="Ajuste fino da sincronia (ms)" VerticalAlignment="Center"/>
+                                <TextBox x:Name="SyncBox" Width="70" Margin="12,0,0,0" Background="{StaticResource Surface2}"
+                                         Foreground="{StaticResource Text}" BorderBrush="{StaticResource Border}" CaretBrush="White" Padding="6,4"/>
+                            </StackPanel>
+                            <TextBlock Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                       Text="O programa já alinha o som com a imagem automaticamente (padrão: 0). Só use se precisar de ajuste fino: valor POSITIVO atrasa o som; valor NEGATIVO (ex.: -200) adianta o som. Faixa: -2000 a 2000."/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <TextBlock Text="GOOGLE DRIVE" Foreground="{StaticResource Muted}" FontSize="12" FontWeight="SemiBold" Margin="2,20,0,8"/>
+                <Border Background="{StaticResource Surface}" BorderBrush="{StaticResource Border}" BorderThickness="1"
+                        CornerRadius="14" Padding="16">
+                    <StackPanel x:Name="DrivePanel">
+                        <StackPanel Orientation="Horizontal">
+                            <CheckBox x:Name="DriveCheck" Click="DriveOption_Click" VerticalAlignment="Center"
+                                      Foreground="{StaticResource Text}" Content="Enviar as gravações para o Google Drive da empresa"/>
+                            <Button x:Name="DriveHelpButton" Content="?" Style="{StaticResource HelpBtn}" Margin="10,0,0,0"
+                                    ToolTip="Como configurar o envio" Click="DriveHelpButton_Click"/>
+                            <Popup x:Name="DriveHelpPopup" PlacementTarget="{Binding ElementName=DriveHelpButton}"
+                                   Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
+                                <Border Background="{StaticResource Surface2}" BorderBrush="{StaticResource Accent}"
+                                        BorderThickness="1" CornerRadius="12" Padding="16" Width="420" Margin="0,6,14,14"
+                                        TextElement.Foreground="{StaticResource Text}">
+                                    <StackPanel>
+                                        <TextBlock Text="Configurar o envio (uma vez só)" FontWeight="SemiBold" FontSize="15"/>
+                                        <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{StaticResource Muted}"
+                                                   Text="Use a conta Google da empresa que já tem acesso à pasta."/>
+                                        <TextBlock TextWrapping="Wrap" Margin="0,8,0,0"
+                                                   Text="1) Clique em &quot;Copiar código do script&quot;.&#10;2) Abra script.new, apague o que aparecer e cole o código.&#10;3) Troque TROQUE-POR-UMA-CHAVE-LONGA por uma chave sua.&#10;4) Implantar &gt; Nova implantação &gt; App da Web.&#10;    Executar como: Eu  |  Quem pode acessar: Qualquer pessoa.&#10;5) Implante e autorize (Avançado &gt; Acessar projeto).&#10;6) Copie o URL do App da Web e cole aqui, com a chave e o link da pasta.&#10;7) Clique em &quot;Testar conexão&quot;."/>
+                                        <TextBlock TextWrapping="Wrap" Margin="0,10,0,0" Foreground="{StaticResource Muted}" FontSize="12"
+                                                   Text="Não use &quot;Qualquer pessoa em [empresa]&quot;: o programa não consegue entrar com a conta Google e o envio falharia. Quem souber o URL e a chave só consegue enviar arquivos para a pasta (não lê nem apaga)."/>
+                                    </StackPanel>
+                                </Border>
+                            </Popup>
+                        </StackPanel>
+
+                        <StackPanel x:Name="DriveOptions" Margin="24,10,0,0" Visibility="Collapsed">
+                            <TextBlock Text="Link da pasta do Google Drive"/>
+                            <TextBox x:Name="DriveFolderBox" Margin="0,4,0,10" Background="{StaticResource Surface2}" Foreground="{StaticResource Text}"
+                                     BorderBrush="{StaticResource Border}" CaretBrush="White" Padding="8,7"/>
+                            <TextBlock Text="URL do App da Web (script)"/>
+                            <TextBox x:Name="DriveUrlBox" Margin="0,4,0,10" Background="{StaticResource Surface2}" Foreground="{StaticResource Text}"
+                                     BorderBrush="{StaticResource Border}" CaretBrush="White" Padding="8,7"/>
+                            <TextBlock Text="Chave secreta"/>
+                            <PasswordBox x:Name="DriveKeyBox" Margin="0,4,0,12" Background="{StaticResource Surface2}" Foreground="{StaticResource Text}"
+                                         BorderBrush="{StaticResource Border}" CaretBrush="White" Padding="8,7"/>
+                            <StackPanel Orientation="Horizontal">
+                                <Button x:Name="DriveCopyScriptButton" Content="Copiar código do script" Style="{StaticResource GhostBtn}"
+                                        Height="34" MinWidth="170" FontSize="13" Margin="0,0,10,0" Click="DriveCopyScriptButton_Click"/>
+                                <Button x:Name="DriveTestButton" Content="Testar conexão" Style="{StaticResource GhostBtn}"
+                                        Height="34" MinWidth="140" FontSize="13" Margin="0" Click="DriveTestButton_Click"/>
+                            </StackPanel>
+                            <TextBlock x:Name="DriveStatus" TextWrapping="Wrap" Margin="0,8,0,0" FontSize="12" Foreground="{StaticResource Muted}"/>
+                            <CheckBox x:Name="DriveAutoCheck" Margin="0,12,0,0" Foreground="{StaticResource Text}"
+                                      Content="Enviar automaticamente ao finalizar (sem perguntar)"/>
+                            <TextBlock Foreground="{StaticResource Muted}" FontSize="12" TextWrapping="Wrap" Margin="0,4,0,0"
+                                       Text="Desmarcado, o programa pergunta a cada gravação se você quer enviar. O MP4 é enviado como está, sem compactar."/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+
+                <Border x:Name="MessageBorder" Visibility="Collapsed" Margin="0,18,0,0" CornerRadius="12" Padding="14"
+                        Background="{StaticResource Surface2}" BorderBrush="{StaticResource Border}" BorderThickness="1">
+                    <StackPanel>
+                        <TextBlock x:Name="MessageText" TextWrapping="Wrap"/>
+                        <StackPanel x:Name="ActionsPanel" Orientation="Horizontal" Margin="0,10,0,0" Visibility="Collapsed">
+                            <Button x:Name="OpenFolderButton" Content="Abrir pasta" Style="{StaticResource GhostBtn}"
+                                    Height="34" MinWidth="110" FontSize="13" Margin="0,0,8,0" Click="OpenFolderButton_Click"/>
+                            <Button x:Name="DriveButton" Content="Enviar ao Drive" Style="{StaticResource GhostBtn}"
+                                    Height="34" MinWidth="130" FontSize="13" Margin="0,0,8,0" Visibility="Collapsed" Click="DriveButton_Click"/>
+                            <Button x:Name="PlayButton" Content="Reproduzir" Style="{StaticResource GhostBtn}"
+                                    Height="34" MinWidth="110" FontSize="13" Margin="0" Click="PlayButton_Click"/>
+                        </StackPanel>
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+
+        <!-- Controles de gravação -->
+        <StackPanel Grid.Row="2" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,18,0,0">
+            <Button x:Name="RecButton" Content="●  Iniciar gravação" Style="{StaticResource PrimaryBtn}" Width="240"
+                    IsEnabled="False" Click="RecButton_Click"/>
+            <Button x:Name="PauseButton" Content="Pausar" Style="{StaticResource GhostBtn}" Width="160"
+                    Visibility="Collapsed" Click="PauseButton_Click"/>
+            <Button x:Name="StopButton" Content="■  Finalizar" Style="{StaticResource PrimaryBtn}" Width="180"
+                    Visibility="Collapsed" Click="StopButton_Click"/>
+        </StackPanel>
+    </Grid>
+</Window>
