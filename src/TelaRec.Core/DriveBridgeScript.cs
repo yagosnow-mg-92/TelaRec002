@@ -3,29 +3,55 @@ namespace TelaRec.Core;
 /// <summary>Código do Google Apps Script que o usuário cola em script.new (cópia de drive-bridge/Code.gs).</summary>
 public static class DriveBridgeScript
 {
+    public const string Placeholder = "TROQUE-POR-UMA-CHAVE-LONGA";
+
+    /// <summary>Versão do script que este programa espera (o script informa a sua no teste de conexão).</summary>
+    public const int Version = 3;
+
+    /// <summary>Devolve o código já com a chave embutida (o usuário não precisa editar nada).</summary>
+    public static string WithKey(string key) => Code.Replace(Placeholder, key);
+
+    /// <summary>Número (a partir de 1) da linha "const CHAVE" no código copiado.</summary>
+    public static int KeyLine
+    {
+        get
+        {
+            var lines = Code.Split('\n');
+            for (int i = 0; i < lines.Length; i++)
+                if (lines[i].StartsWith("const CHAVE")) return i + 1;
+            return 0;
+        }
+    }
+
     public const string Code = """
 /**
- * TelaRec - Ponte de envio ao Google Drive (Google Apps Script)  -  versão 2
+ * TelaRec - Ponte de envio ao Google Drive (Google Apps Script)  -  versão 3
  *
- * PASSO A PASSO (uma vez só, com a conta Google da empresa que tem acesso à pasta):
- *  1. Neste editor, selecione tudo (Ctrl+A), apague e cole ESTE código inteiro.
- *  2. Na linha "const CHAVE = ..." troque o texto entre aspas por uma chave sua (longa, letras e números).
- *     NÃO use o ID que aparece no URL. Depois salve (Ctrl+S).
- *  3. No menu no topo do editor, escolha a função "autorizar", clique em Executar e aceite as permissões
+ * O QUE É A "CHAVE"?  É uma SENHA que VOCÊ INVENTA (ou que o TelaRec gera para você).
+ * Ela NÃO é gerada pelo Google e NÃO é o ID da implantação. A mesma senha fica em dois lugares:
+ * aqui no script (linha "const CHAVE") e no campo "Chave secreta" do TelaRec.
+ * Se você copiou este código pelo botão "Copiar código do script" do TelaRec, a chave JÁ ESTÁ aqui dentro.
+ *
+ * PASSO A PASSO (uma vez só):
+ *  1. Neste editor: Ctrl+A, Delete, Ctrl+V (cola este código inteiro) e Ctrl+S (salvar).
+ *  2. No menu no topo do editor, escolha a função "autorizar", clique em Executar e aceite as permissões
  *     (Avançado > Acessar projeto > Permitir).
- *  4. Implantar > Nova implantação > tipo "App da Web":
+ *  3. Implantar > Nova implantação > tipo "App da Web":
  *       Executar como: Eu     |     Quem pode acessar: Qualquer pessoa
  *     Clique em Implantar e copie o "URL do app da Web".
- *  5. TESTE: abra esse URL numa JANELA ANÔNIMA do navegador. Deve aparecer {"ok":true,"servico":"TelaRec",...}.
- *  6. No TelaRec: cole o URL, a chave e o link da pasta e clique em "Testar conexão".
+ *  4. TESTE: abra esse URL numa JANELA ANÔNIMA. Deve aparecer {"ok":true,"servico":"TelaRec",...}.
+ *  5. No TelaRec: cole o URL e clique em "Testar conexão".
  *
  * SEMPRE que mudar qualquer coisa neste código (inclusive a chave):
  *   Implantar > Gerenciar implantações > ícone do lápis > Versão: "Nova versão" > Implantar.
- *   (Sem isso o App da Web continua usando o código antigo.)
  *
- * SEGURANÇA: quem tiver o URL + a CHAVE consegue ENVIAR arquivos para a pasta, mas não consegue
- * ler nem apagar nada.
+ * A ÚNICA LINHA QUE PODE PRECISAR DE ALTERAÇÃO é a que começa com "const CHAVE" (use Ctrl+F e procure por CHAVE).
+ *   Altere SOMENTE o texto entre as aspas dessa linha. Nenhuma outra linha deve ser editada.
+ *
+ * SEGURANÇA: quem tiver o URL + a CHAVE consegue ENVIAR arquivos para a pasta, mas não ler nem apagar.
  */
+const VERSAO = 3; // usada pelo TelaRec para saber se a publicação está atualizada (não altere)
+
 const CHAVE = 'TROQUE-POR-UMA-CHAVE-LONGA';
 
 // Opcional: limite as pastas aceitas. Ex.: ['1AbC...IdDaPasta']. Vazio = qualquer pasta que você possa editar.
@@ -34,7 +60,7 @@ const PASTAS_PERMITIDAS = [];
 function doPost(e) {
   try {
     const req = JSON.parse(e.postData.contents);
-    if (CHAVE === 'TROQUE-POR-UMA-CHAVE-LONGA') {
+    if (!chaveTrocada_()) {
       return resposta_({ ok: false, error: 'Troque a CHAVE no script e implante uma nova versão.' });
     }
     if (!req.key || req.key !== CHAVE) return resposta_({ ok: false, error: 'Chave inválida.' });
@@ -47,7 +73,7 @@ function doPost(e) {
       let pasta;
       try { pasta = DriveApp.getFolderById(req.folderId); }
       catch (err) { return resposta_({ ok: false, error: 'Pasta não encontrada ou sem permissão para a conta dona do script.' }); }
-      return resposta_({ ok: true, folderName: pasta.getName(), owner: Session.getEffectiveUser().getEmail() });
+      return resposta_({ ok: true, versao: VERSAO, folderName: pasta.getName(), owner: Session.getEffectiveUser().getEmail() });
     }
 
     if (req.action === 'start') {
@@ -91,8 +117,9 @@ function doGet() {
   return resposta_({
     ok: true,
     servico: 'TelaRec',
+    versao: VERSAO,
     msg: 'Ponte no ar. Se você vê esta mensagem, o App da Web está publicado corretamente.',
-    chaveConfigurada: CHAVE !== 'TROQUE-POR-UMA-CHAVE-LONGA'
+    chaveConfigurada: chaveTrocada_()
   });
 }
 
@@ -101,6 +128,11 @@ function autorizar() {
   DriveApp.getRootFolder();
   UrlFetchApp.fetch('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest', { muteHttpExceptions: true });
   Logger.log('Autorização concluída. Agora faça a implantação (Implantar > Nova implantação).');
+}
+
+// Verdadeiro quando a CHAVE já não é o texto-modelo.
+function chaveTrocada_() {
+  return CHAVE.indexOf('TROQUE-POR') !== 0;
 }
 """;
 }

@@ -90,8 +90,22 @@ internal static class DriveUploader
         try
         {
             var r = await CallScriptAsync(url, new { key, action = "check", folderId }, ct);
-            if (!IsOk(r)) return new DriveCheckResult(false, Str(r, "error") ?? "O script recusou o teste.");
-            return new DriveCheckResult(true, $"Conectado! Pasta: \"{Str(r, "folderName")}\" (conta: {Str(r, "owner")}).");
+            if (!IsOk(r))
+            {
+                var err = Str(r, "error") ?? "O script recusou o teste.";
+                if (err.Contains("Troque a CHAVE"))
+                    err += "\n\nO script publicado ainda não tem a sua chave. Confira no editor a linha \"const CHAVE\", salve (Ctrl+S) e crie uma NOVA VERSÃO da implantação (Implantar > Gerenciar implantações > lápis > Versão: Nova versão > Implantar).";
+                else if (err.Contains("Chave inválida"))
+                    err += "\n\nA chave do TelaRec é diferente da chave do script. Clique em \"Gerar nova chave\", copie o código de novo, cole no script.new, salve e crie uma NOVA VERSÃO da implantação.";
+                else if (err.Contains("Pasta não encontrada"))
+                    err += "\n\nConfira o link da pasta e se a conta que criou o script tem acesso a ela (abra a pasta no Drive com essa conta).";
+                return new DriveCheckResult(false, err);
+            }
+            int version = r.TryGetProperty("versao", out var v) && v.ValueKind == JsonValueKind.Number ? v.GetInt32() : 0;
+            if (version < TelaRec.Core.DriveBridgeScript.Version)
+                return new DriveCheckResult(false, $"O script publicado é de uma versão antiga ({(version == 0 ? "sem número de versão" : "v" + version)}). " +
+                    "Clique em \"Copiar código do script\", cole no script.new (Ctrl+A, Delete, Ctrl+V, Ctrl+S) e crie uma NOVA VERSÃO da implantação.");
+            return new DriveCheckResult(true, $"Conectado! Pasta: \"{Str(r, "folderName")}\" (conta: {Str(r, "owner")}; script v{version}).");
         }
         catch (DriveException ex) { return new DriveCheckResult(false, ex.Message); }
         catch (HttpRequestException ex) { return new DriveCheckResult(false, "Sem conexão com o Google: " + ex.Message); }

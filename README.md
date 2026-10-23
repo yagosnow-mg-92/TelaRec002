@@ -43,8 +43,8 @@ Ao finalizar uma gravação, o programa pode **enviar o MP4 (sem compactar) para
 
 **Como funciona (sem Google Cloud):** você cria uma vez um pequeno *Google Apps Script* na conta da empresa que tem acesso à pasta. Esse script roda com a permissão do dono e apenas **abre uma sessão de envio retomável** no Drive; o arquivo vai direto do computador para o Google, em partes de 8 MB, com janela de progresso, retomada automática se a internet cair e conferência do tamanho no final. O vídeo herda as permissões da pasta (quem está no grupo da empresa consegue abrir o link).
 
-**Configuração (uma vez):** veja o guia ilustrado por etapas com testes em [`drive-bridge/PASSO-A-PASSO.md`](drive-bridge/PASSO-A-PASSO.md). Resumo: seção **Google Drive** do programa → botão **?** mostra o passo a passo; o botão **Copiar código do script** copia o código (também disponível em `drive-bridge/Code.gs`). Resumo:
-1. Abra https://script.new com a conta da empresa e cole o código; troque `TROQUE-POR-UMA-CHAVE-LONGA` por uma chave sua.
+**Configuração (uma vez):** veja o guia ilustrado por etapas com testes em [`drive-bridge/PASSO-A-PASSO.md`](drive-bridge/PASSO-A-PASSO.md). Resumo: o botão **Gerar nova chave** cria uma senha (a "chave"; não vem do Google), e **Copiar código do script** copia o código **já com a chave dentro** (também disponível em `drive-bridge/Code.gs`, onde a chave precisa ser trocada à mão). O botão **?** abre um **assistente passo a passo** com botões de ação e conferência em cada etapa. O teste de conexão também detecta script publicado em versão antiga e chave diferente, explicando o que fazer. Passos:
+1. No TelaRec: **Gerar nova chave** → **Copiar código do script**. Abra https://script.new com a conta da empresa e cole o código (Ctrl+A, Delete, Ctrl+V, Ctrl+S); rode a função **autorizar**.
 2. *Implantar → Nova implantação → App da Web* — **Executar como: Eu**; **Quem pode acessar: Qualquer pessoa**. Implante e autorize.
 3. No TelaRec, cole o **link da pasta**, o **URL do App da Web** e a **chave**; clique em **Testar conexão**.
 

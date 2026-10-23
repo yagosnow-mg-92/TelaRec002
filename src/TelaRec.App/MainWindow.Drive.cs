@@ -84,31 +84,69 @@ public partial class MainWindow
         return true;
     }
 
-    private void DriveHelpButton_Click(object sender, RoutedEventArgs e) => DriveHelpPopup.IsOpen = true;
+    private (bool Ok, string Message) GenerateKeyAction()
+    {
+        DriveKeyBox.Password = DriveKey.Generate();
+        const string msg = "Chave gerada e colocada no campo \"Chave secreta\" do TelaRec. Agora clique em \"Copiar código do script\".";
+        SetDriveStatus(msg, "Green");
+        return (true, msg);
+    }
 
-    private void DriveCopyScriptButton_Click(object sender, RoutedEventArgs e)
+    private (bool Ok, string Message) CopyScriptAction()
     {
         try
         {
-            Clipboard.SetText(DriveBridgeScript.Code);
-            SetDriveStatus("Código copiado! Abra script.new, apague o conteúdo, cole e siga o passo a passo do botão \"?\".", "Green");
+            // A chave é uma senha inventada (não vem do Google). Se o campo estiver vazio, geramos uma.
+            var key = DriveKeyBox.Password.Trim();
+            bool generated = false;
+            if (key.Length == 0) { key = DriveKey.Generate(); DriveKeyBox.Password = key; generated = true; }
+            if (key.Contains('\'') || key.Contains('\\') || key.Contains('"') || key.Contains('\n'))
+            {
+                const string bad = "A chave não pode ter aspas, barras nem quebras de linha. Clique em \"Gerar nova chave\".";
+                SetDriveStatus(bad, "Red");
+                return (false, bad);
+            }
+            Clipboard.SetText(DriveBridgeScript.WithKey(key));
+            var msg = (generated ? "Chave gerada. " : "") +
+                      $"Código copiado, com a sua chave JÁ DENTRO (linha {DriveBridgeScript.KeyLine}, \"const CHAVE\"). Você não precisa alterar nada: " +
+                      "agora vá ao script.new, selecione tudo (Ctrl+A), apague (Delete), cole (Ctrl+V) e salve (Ctrl+S).";
+            SetDriveStatus(msg, "Green");
+            return (true, msg);
         }
-        catch (Exception ex) { SetDriveStatus("Não foi possível copiar: " + ex.Message, "Red"); }
+        catch (Exception ex)
+        {
+            var msg = "Não foi possível copiar: " + ex.Message;
+            SetDriveStatus(msg, "Red");
+            return (false, msg);
+        }
     }
+
+    private async Task<(bool Ok, string Message)> RunDriveTestAsync()
+    {
+        if (!ValidateDriveFields(out var folderId, out var url, out var key)) return (false, DriveStatus.Text);
+        SetDriveStatus("Testando a conexão…", "Muted");
+        var r = await DriveUploader.CheckAsync(url, key, folderId, CancellationToken.None);
+        var warn = url.Contains(key, StringComparison.Ordinal)
+            ? "\n\n⚠ Sua chave é igual a um trecho do URL (o ID da implantação). Clique em \"Gerar nova chave\", copie o código de novo e atualize o script (Nova versão)."
+            : "";
+        SetDriveStatus(r.Message + warn, r.Ok ? "Green" : "Red");
+        return (r.Ok, r.Message + warn);
+    }
+
+    private void DriveHelpButton_Click(object sender, RoutedEventArgs e)
+    {
+        var actions = new DriveHelpActions(GenerateKeyAction, CopyScriptAction, RunDriveTestAsync, DriveBridgeScript.KeyLine);
+        new DriveHelpWindow(actions) { Owner = this }.Show();
+    }
+
+    private void DriveNewKeyButton_Click(object sender, RoutedEventArgs e) => GenerateKeyAction();
+
+    private void DriveCopyScriptButton_Click(object sender, RoutedEventArgs e) => CopyScriptAction();
 
     private async void DriveTestButton_Click(object sender, RoutedEventArgs e)
     {
-        if (!ValidateDriveFields(out var folderId, out var url, out var key)) return;
         DriveTestButton.IsEnabled = false;
-        SetDriveStatus("Testando a conexão…", "Muted");
-        try
-        {
-            var r = await DriveUploader.CheckAsync(url, key, folderId, CancellationToken.None);
-            var warn = url.Contains(key, StringComparison.Ordinal)
-                ? "\n\n⚠ Sua chave é igual a um trecho do URL (o ID da implantação). Troque por uma chave diferente: altere CHAVE no script, salve e crie uma Nova versão da implantação."
-                : "";
-            SetDriveStatus(r.Message + warn, r.Ok ? "Green" : "Red");
-        }
+        try { await RunDriveTestAsync(); }
         finally { DriveTestButton.IsEnabled = true; }
     }
 

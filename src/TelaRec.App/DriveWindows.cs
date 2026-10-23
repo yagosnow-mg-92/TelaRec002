@@ -128,3 +128,174 @@ internal sealed class DriveResultWindow : Window
         Loaded += (_, _) => { copy.Focus(); };
     }
 }
+
+internal sealed record DriveHelpActions(
+    Func<(bool Ok, string Message)> GenerateKey,
+    Func<(bool Ok, string Message)> CopyCode,
+    Func<Task<(bool Ok, string Message)>> Test,
+    int KeyLine);
+
+/// <summary>Assistente passo a passo para configurar o envio ao Google Drive.</summary>
+internal sealed class DriveHelpWindow : Window
+{
+    private readonly StackPanel _root = new() { Margin = new Thickness(24, 20, 24, 24) };
+
+    public DriveHelpWindow(DriveHelpActions a)
+    {
+        Title = "Como configurar o envio ao Google Drive";
+        Width = 800; Height = 780; MinWidth = 640; MinHeight = 520;
+        WindowStartupLocation = WindowStartupLocation.CenterOwner;
+        Background = WinUi.Res("Bg"); Foreground = WinUi.Res("Text"); FontFamily = new FontFamily("Segoe UI"); FontSize = 14;
+        Content = new ScrollViewer { VerticalScrollBarVisibility = ScrollBarVisibility.Auto, Content = _root };
+
+        Add(T("Configurar o envio ao Google Drive", 20, bold: true));
+        Add(T("Você faz isso uma vez só. Siga os passos na ordem; em cada um há uma conferência para saber se deu certo. " +
+              "Use o Chrome já logado com a conta Google da empresa que tem acesso à pasta.", muted: true, margin: new Thickness(0, 4, 0, 14)));
+
+        // ---- O que é a chave
+        Add(Card(
+            T("Antes de tudo: o que é a \"chave\"?", bold: true),
+            T("A chave é uma SENHA criada aqui pelo TelaRec. Ela não vem do Google e não é o ID que o Google mostra depois de publicar. " +
+              "Ela fica escrita em dois lugares: dentro do script (no Google) e no campo \"Chave secreta\" do TelaRec. " +
+              "Se as duas forem iguais, o envio é liberado.", margin: new Thickness(0, 6, 0, 0)),
+            T($"Você NÃO precisa editar o código: o botão \"Copiar código do script\" já escreve a chave nele, na linha {a.KeyLine} (a que começa com const CHAVE). " +
+              "Essa é a única linha do código que tem a chave; se um dia precisar trocá-la à mão, altere somente o texto entre as aspas dessa linha.",
+              muted: true, margin: new Thickness(0, 8, 0, 0))));
+
+        // ---- Passo 1
+        var s1 = Status();
+        Add(Step("1", "No TelaRec: gerar a chave e copiar o código",
+            "Antes, cole o link da pasta do Drive no campo \"Link da pasta\" da tela principal. Depois clique nos dois botões, nesta ordem:",
+            Buttons(("1) Gerar nova chave", () => Show(s1, a.GenerateKey())), ("2) Copiar código do script", () => Show(s1, a.CopyCode()))),
+            s1));
+
+        // ---- Passo 2
+        Add(Step("2", "No Google: colar o código",
+            "Clique no botão abaixo. Vai abrir o editor do Google Apps Script (uma página com um código de exemplo \"function myFunction\"). Então:\n" +
+            "   • clique em cima do código;\n   • aperte Ctrl+A (seleciona tudo) e Delete (apaga);\n   • aperte Ctrl+V (cola o código copiado) e Ctrl+S (salva).\n\n" +
+            $"Conferência: perto do início, na linha {a.KeyLine}, deve aparecer  const CHAVE = 'uma-sequência-de-letras-e-números'.  " +
+            "Se aparecer TROQUE-POR-UMA-CHAVE-LONGA, você copiou o código sem gerar a chave: volte ao Passo 1.",
+            Buttons(("Abrir script.new", () => Open("https://script.new")))));
+
+        // ---- Passo 3
+        Add(Step("3", "No Google: dar permissão ao script",
+            "No topo do editor, ao lado do botão \"Depuração\", há um menu com o nome de uma função (por exemplo \"doGet\").\n" +
+            "   • clique nesse menu e escolha  autorizar;\n   • clique em Executar;\n" +
+            "   • na janela \"Autorização necessária\": Revisar permissões → escolha sua conta → \"O Google não verificou este app\" (é normal, o script é seu) → Avançado → \"Acessar projeto sem título (não seguro)\" → Permitir.\n\n" +
+            "Conferência: no \"Registro de execução\" (parte de baixo) aparece \"Execução concluída\"."));
+
+        // ---- Passo 4
+        Add(Step("4", "No Google: publicar o script",
+            "   • clique no botão azul  Implantar  (canto superior direito) → Nova implantação;\n" +
+            "   • ao lado de \"Selecione o tipo\" clique na engrenagem e escolha  App da Web;\n" +
+            "   • Executar como:  Eu (seu e-mail);\n" +
+            "   • Quem pode acessar:  Qualquer pessoa  (é a ÚLTIMA opção da lista; não escolha \"Qualquer pessoa em [empresa]\" nem \"com uma Conta do Google\");\n" +
+            "   • clique em Implantar e, na tela seguinte, copie o \"URL do app da Web\" (termina em /exec).\n\n" +
+            "Conferência (recomendada): abra uma janela anônima do Chrome (Ctrl+Shift+N), cole esse URL e aperte Enter. Deve aparecer um texto com \"ok\":true, \"versao\":3 e \"chaveConfigurada\":true."));
+
+        // ---- Passo 5
+        var s5 = Status();
+        Add(Step("5", "No TelaRec: colar o URL e testar",
+            "Cole o URL do app da Web no campo \"URL do App da Web\" da tela principal (a chave já está preenchida) e clique em Testar conexão (pode clicar aqui também).\n" +
+            "Conferência: o resultado fica verde, com o nome da sua pasta e o seu e-mail.",
+            ButtonsAsync(("Testar conexão", async () => Show(s5, await a.Test()))),
+            s5));
+
+        // ---- Se mudar depois
+        Add(Card(
+            T("Mudou o código ou a chave depois de publicar?", bold: true),
+            T("O Google guarda a publicação como uma \"foto\" do código. Para atualizar a foto:\n" +
+              "   • Implantar → Gerenciar implantações;\n   • clique no ícone do lápis (Editar);\n   • em \"Versão\" escolha  Nova versão;\n   • clique em Implantar (o URL continua o mesmo).\n" +
+              "Sem isso o Google continua usando o código antigo.", margin: new Thickness(0, 6, 0, 0))));
+
+        // ---- Erros
+        Add(Card(
+            T("Se aparecer uma mensagem de erro", bold: true),
+            T("• \"Troque a CHAVE no script…\" → a publicação ainda é antiga. Salve o código (Ctrl+S) e crie uma Nova versão.\n" +
+              "• \"Chave inválida\" → a chave do TelaRec é diferente da do script. Gerar nova chave → Copiar código → colar no script → Nova versão.\n" +
+              "• \"O script publicado é de uma versão antiga\" → cole o código novo (Passo 2) e crie uma Nova versão.\n" +
+              "• \"O Google respondeu com uma página…\" → confira o Passo 4 (\"Qualquer pessoa\") e crie uma Nova versão.\n" +
+              "• \"Pasta não encontrada\" → o link da pasta está errado ou a conta que criou o script não tem acesso a ela.\n" +
+              "• Qualquer \"Detalhe técnico\" → copie o texto inteiro e envie ao suporte.", muted: true, margin: new Thickness(0, 6, 0, 0))));
+
+        Add(Card(
+            T("Segurança", bold: true),
+            T("Quem souber o URL e a chave só consegue enviar arquivos para a pasta (não lê nem apaga nada). " +
+              "Não compartilhe prints com o URL e a chave. Se vazarem: Gerar nova chave → Copiar código → colar no script → Nova versão.",
+              muted: true, margin: new Thickness(0, 6, 0, 0))));
+    }
+
+    private void Add(UIElement e) => _root.Children.Add(e);
+
+    private static TextBlock T(string text, double size = 14, bool bold = false, bool muted = false, Thickness? margin = null) => new()
+    {
+        Text = text, FontSize = size, TextWrapping = TextWrapping.Wrap,
+        FontWeight = bold ? FontWeights.SemiBold : FontWeights.Normal,
+        Foreground = muted ? WinUi.Res("Muted") : WinUi.Res("Text"),
+        Margin = margin ?? new Thickness(0),
+    };
+
+    private static TextBlock Status() => new() { TextWrapping = TextWrapping.Wrap, FontSize = 13, Margin = new Thickness(0, 10, 0, 0), Foreground = WinUi.Res("Muted") };
+
+    private static void Show(TextBlock tb, (bool Ok, string Message) r)
+    {
+        tb.Text = r.Message;
+        tb.Foreground = WinUi.Res(r.Ok ? "Green" : "Red");
+    }
+
+    private static void Open(string url)
+    {
+        try { Process.Start(new ProcessStartInfo(url) { UseShellExecute = true }); } catch { }
+    }
+
+    private static Border Card(params UIElement[] children)
+    {
+        var sp = new StackPanel();
+        foreach (var c in children) sp.Children.Add(c);
+        return new Border
+        {
+            Background = WinUi.Res("Surface"), BorderBrush = WinUi.Res("Border"), BorderThickness = new Thickness(1),
+            CornerRadius = new CornerRadius(12), Padding = new Thickness(16), Margin = new Thickness(0, 0, 0, 12), Child = sp,
+        };
+    }
+
+    private static StackPanel Buttons(params (string Text, Action Click)[] items)
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
+        foreach (var (text, click) in items)
+        {
+            var b = WinUi.MakeButton(text, WinUi.Res("Accent"), 190);
+            b.Click += (_, _) => click();
+            sp.Children.Add(b);
+        }
+        return sp;
+    }
+
+    private static StackPanel ButtonsAsync(params (string Text, Func<Task> Click)[] items)
+    {
+        var sp = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 12, 0, 0) };
+        foreach (var (text, click) in items)
+        {
+            var b = WinUi.MakeButton(text, WinUi.Res("Accent"), 190);
+            b.Click += async (_, _) => { b.IsEnabled = false; try { await click(); } finally { b.IsEnabled = true; } };
+            sp.Children.Add(b);
+        }
+        return sp;
+    }
+
+    private static Border Step(string number, string title, string body, StackPanel? buttons = null, TextBlock? status = null)
+    {
+        var header = new StackPanel { Orientation = Orientation.Horizontal };
+        header.Children.Add(new Border
+        {
+            Width = 28, Height = 28, CornerRadius = new CornerRadius(14), Background = WinUi.Res("Accent"), Margin = new Thickness(0, 0, 10, 0),
+            Child = new TextBlock { Text = number, FontWeight = FontWeights.Bold, Foreground = Brushes.White, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center },
+        });
+        header.Children.Add(new TextBlock { Text = title, FontSize = 16, FontWeight = FontWeights.SemiBold, VerticalAlignment = VerticalAlignment.Center });
+
+        var items = new List<UIElement> { header, T(body, margin: new Thickness(0, 10, 0, 0)) };
+        if (buttons != null) items.Add(buttons);
+        if (status != null) items.Add(status);
+        return Card(items.ToArray());
+    }
+}

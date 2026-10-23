@@ -207,22 +207,6 @@
                                       Foreground="{StaticResource Text}" Content="Enviar as gravações para o Google Drive da empresa"/>
                             <Button x:Name="DriveHelpButton" Content="?" Style="{StaticResource HelpBtn}" Margin="10,0,0,0"
                                     ToolTip="Como configurar o envio" Click="DriveHelpButton_Click"/>
-                            <Popup x:Name="DriveHelpPopup" PlacementTarget="{Binding ElementName=DriveHelpButton}"
-                                   Placement="Bottom" StaysOpen="False" AllowsTransparency="True" PopupAnimation="Fade">
-                                <Border Background="{StaticResource Surface2}" BorderBrush="{StaticResource Accent}"
-                                        BorderThickness="1" CornerRadius="12" Padding="16" Width="470" Margin="0,6,14,14"
-                                        TextElement.Foreground="{StaticResource Text}">
-                                    <StackPanel>
-                                        <TextBlock Text="Configurar o envio (uma vez só)" FontWeight="SemiBold" FontSize="15"/>
-                                        <TextBlock TextWrapping="Wrap" Margin="0,8,0,0" Foreground="{StaticResource Muted}"
-                                                   Text="Use a conta Google da empresa que já tem acesso à pasta."/>
-                                        <TextBlock TextWrapping="Wrap" Margin="0,8,0,0"
-                                                   Text="1) Clique em &quot;Copiar código do script&quot;.&#10;2) Abra script.new, selecione tudo (Ctrl+A), apague e cole (Ctrl+V).&#10;3) Na linha const CHAVE troque o texto entre aspas por uma chave sua (não use o ID do URL) e salve (Ctrl+S).&#10;4) No menu do topo escolha a função &quot;autorizar&quot;, clique em Executar e aceite as permissões.&#10;5) Implantar &gt; Nova implantação &gt; App da Web.&#10;    Executar como: Eu  |  Quem pode acessar: Qualquer pessoa.&#10;6) Teste: abra o URL do App da Web numa janela anônima; deve aparecer ok:true.&#10;7) Cole aqui o URL, a chave e o link da pasta e clique em &quot;Testar conexão&quot;.&#10;&#10;Sempre que mudar o código: Implantar &gt; Gerenciar implantações &gt; lápis &gt; Versão: Nova versão &gt; Implantar."/>
-                                        <TextBlock TextWrapping="Wrap" Margin="0,10,0,0" Foreground="{StaticResource Muted}" FontSize="12"
-                                                   Text="Não use &quot;Qualquer pessoa em [empresa]&quot;: o programa não consegue entrar com a conta Google e o envio falharia. Quem souber o URL e a chave só consegue enviar arquivos para a pasta (não lê nem apaga)."/>
-                                    </StackPanel>
-                                </Border>
-                            </Popup>
                         </StackPanel>
 
                         <StackPanel x:Name="DriveOptions" Margin="24,10,0,0" Visibility="Collapsed">
@@ -232,10 +216,12 @@
                             <TextBlock Text="URL do App da Web (script)"/>
                             <TextBox x:Name="DriveUrlBox" Margin="0,4,0,10" Background="{StaticResource Surface2}" Foreground="{StaticResource Text}"
                                      BorderBrush="{StaticResource Border}" CaretBrush="White" Padding="8,7"/>
-                            <TextBlock Text="Chave secreta"/>
+                            <TextBlock Text="Chave secreta (uma senha inventada por você; não vem do Google)"/>
                             <PasswordBox x:Name="DriveKeyBox" Margin="0,4,0,12" Background="{StaticResource Surface2}" Foreground="{StaticResource Text}"
                                          BorderBrush="{StaticResource Border}" CaretBrush="White" Padding="8,7"/>
                             <StackPanel Orientation="Horizontal">
+                                <Button x:Name="DriveNewKeyButton" Content="Gerar nova chave" Style="{StaticResource GhostBtn}"
+                                        Height="34" MinWidth="140" FontSize="13" Margin="0,0,10,0" Click="DriveNewKeyButton_Click"/>
                                 <Button x:Name="DriveCopyScriptButton" Content="Copiar código do script" Style="{StaticResource GhostBtn}"
                                         Height="34" MinWidth="170" FontSize="13" Margin="0,0,10,0" Click="DriveCopyScriptButton_Click"/>
                                 <Button x:Name="DriveTestButton" Content="Testar conexão" Style="{StaticResource GhostBtn}"

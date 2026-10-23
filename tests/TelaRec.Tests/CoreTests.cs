@@ -270,6 +270,45 @@ public class DriveTests
     }
 
     [Fact]
+    public void WithKey_EmbedsKeyAndKeepsLogicIntact()
+    {
+        var key = DriveKey.Generate();
+        var code = DriveBridgeScript.WithKey(key);
+        Assert.Contains($"const CHAVE = '{key}';", code);
+        Assert.DoesNotContain(DriveBridgeScript.Placeholder, code);
+        Assert.Contains("function chaveTrocada_", code);
+        Assert.Contains("indexOf('TROQUE-POR') !== 0", code);   // continua detectando o texto-modelo
+        Assert.Equal(1, System.Text.RegularExpressions.Regex.Matches(DriveBridgeScript.Code, DriveBridgeScript.Placeholder).Count);
+    }
+
+    [Fact]
+    public void KeyLine_PointsToConstChaveLine()
+    {
+        var line = DriveBridgeScript.KeyLine;
+        Assert.True(line > 0);
+        var lines = DriveBridgeScript.Code.Split('\n');
+        Assert.StartsWith("const CHAVE = '", lines[line - 1]);
+        // a linha da chave é a ÚNICA que contém o texto-modelo
+        Assert.Equal(1, lines.Count(l => l.Contains(DriveBridgeScript.Placeholder)));
+    }
+
+    [Fact]
+    public void Script_ReportsVersionExpectedByApp()
+    {
+        Assert.Contains($"const VERSAO = {DriveBridgeScript.Version};", DriveBridgeScript.Code);
+        Assert.Contains("versao: VERSAO", DriveBridgeScript.Code);
+    }
+
+    [Fact]
+    public void GeneratedKey_IsLongSafeAndRandom()
+    {
+        var a = DriveKey.Generate(); var b = DriveKey.Generate();
+        Assert.Equal(32, a.Length);
+        Assert.NotEqual(a, b);
+        Assert.All(a, c => Assert.True(char.IsLetterOrDigit(c)));
+    }
+
+    [Fact]
     public void Settings_DriveRoundTrip()
     {
         var path = Path.Combine(Path.GetTempPath(), "telarec-drive-" + Guid.NewGuid().ToString("N") + ".json");
