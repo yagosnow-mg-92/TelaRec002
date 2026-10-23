@@ -265,6 +265,8 @@ public class DriveTests
         Assert.Contains("X-Upload-Content-Length", c);
         Assert.Contains("TROQUE-POR-UMA-CHAVE-LONGA", c);   // o usuário precisa trocar a chave
         Assert.Contains("req.key !== CHAVE", c);             // validação da chave
+        Assert.Contains("function doGet", c);                // teste pelo navegador
+        Assert.Contains("function autorizar", c);            // concede as permissões
     }
 
     [Fact]

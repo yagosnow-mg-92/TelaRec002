@@ -5,22 +5,26 @@ public static class DriveBridgeScript
 {
     public const string Code = """
 /**
- * TelaRec - Ponte de envio ao Google Drive (Google Apps Script)
+ * TelaRec - Ponte de envio ao Google Drive (Google Apps Script)  -  versão 2
  *
- * COMO USAR (uma vez só, com a conta Google da empresa que tem acesso à pasta):
- *  1. Abra https://script.new e apague o código que aparecer.
- *  2. Cole TODO este código.
- *  3. Troque o valor de CHAVE abaixo por uma chave sua, longa (letras e números).
+ * PASSO A PASSO (uma vez só, com a conta Google da empresa que tem acesso à pasta):
+ *  1. Neste editor, selecione tudo (Ctrl+A), apague e cole ESTE código inteiro.
+ *  2. Na linha "const CHAVE = ..." troque o texto entre aspas por uma chave sua (longa, letras e números).
+ *     NÃO use o ID que aparece no URL. Depois salve (Ctrl+S).
+ *  3. No menu no topo do editor, escolha a função "autorizar", clique em Executar e aceite as permissões
+ *     (Avançado > Acessar projeto > Permitir).
  *  4. Implantar > Nova implantação > tipo "App da Web":
- *       Executar como: Eu
- *       Quem pode acessar: Qualquer pessoa
- *     Clique em Implantar e autorize (Avançado > Acessar projeto > Permitir).
- *  5. Copie o "URL do app da Web" e cole no TelaRec, junto com a chave e o link da pasta.
+ *       Executar como: Eu     |     Quem pode acessar: Qualquer pessoa
+ *     Clique em Implantar e copie o "URL do app da Web".
+ *  5. TESTE: abra esse URL numa JANELA ANÔNIMA do navegador. Deve aparecer {"ok":true,"servico":"TelaRec",...}.
+ *  6. No TelaRec: cole o URL, a chave e o link da pasta e clique em "Testar conexão".
  *
- * Sempre que alterar este código, use Implantar > Gerenciar implantações > Editar > Nova versão.
+ * SEMPRE que mudar qualquer coisa neste código (inclusive a chave):
+ *   Implantar > Gerenciar implantações > ícone do lápis > Versão: "Nova versão" > Implantar.
+ *   (Sem isso o App da Web continua usando o código antigo.)
  *
  * SEGURANÇA: quem tiver o URL + a CHAVE consegue ENVIAR arquivos para a pasta, mas não consegue
- * ler nem apagar nada. Para trocar a chave: altere CHAVE, reimplante e atualize o TelaRec.
+ * ler nem apagar nada.
  */
 const CHAVE = 'TROQUE-POR-UMA-CHAVE-LONGA';
 
@@ -80,6 +84,23 @@ function doPost(e) {
 
 function resposta_(obj) {
   return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
+}
+
+// Teste pelo navegador: abrir o URL do App da Web numa janela anônima deve mostrar este JSON.
+function doGet() {
+  return resposta_({
+    ok: true,
+    servico: 'TelaRec',
+    msg: 'Ponte no ar. Se você vê esta mensagem, o App da Web está publicado corretamente.',
+    chaveConfigurada: CHAVE !== 'TROQUE-POR-UMA-CHAVE-LONGA'
+  });
+}
+
+// Execute esta função UMA vez no editor (menu no topo > autorizar > Executar) para conceder as permissões.
+function autorizar() {
+  DriveApp.getRootFolder();
+  UrlFetchApp.fetch('https://www.googleapis.com/discovery/v1/apis/drive/v3/rest', { muteHttpExceptions: true });
+  Logger.log('Autorização concluída. Agora faça a implantação (Implantar > Nova implantação).');
 }
 """;
 }

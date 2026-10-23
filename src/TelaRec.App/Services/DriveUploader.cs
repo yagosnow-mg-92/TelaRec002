@@ -3,7 +3,9 @@ using System.IO;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Net;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 
 namespace TelaRec.Services;
 
@@ -49,11 +51,32 @@ internal static class DriveUploader
         };
         using var resp = await Api.SendAsync(req, ct);
         var body = await resp.Content.ReadAsStringAsync(ct);
-        if (body.TrimStart().StartsWith("<"))
-            throw new DriveException("O Google respondeu com uma página em vez de dados. Confira se o App da Web foi implantado com " +
-                                     "\"Quem pode acessar: Qualquer pessoa\" (e não \"Qualquer pessoa em ...\") e se você implantou a versão mais recente.");
+        if (body.TrimStart().StartsWith("<")) throw new DriveException(DescribeHtml(resp, body));
         try { using var doc = JsonDocument.Parse(body); return doc.RootElement.Clone(); }
         catch { throw new DriveException("Resposta inesperada do script: " + Trunc(body)); }
+    }
+
+    /// <summary>Traduz a página HTML devolvida pelo Google em uma explicação do que fazer.</summary>
+    private static string DescribeHtml(HttpResponseMessage resp, string body)
+    {
+        var host = resp.RequestMessage?.RequestUri?.Host ?? "";
+        var title = Regex.Match(body, @"<title>(.*?)</title>", RegexOptions.Singleline | RegexOptions.IgnoreCase).Groups[1].Value.Trim();
+        var text = Regex.Replace(body, @"<(script|style)[\s\S]*?</\1>", " ", RegexOptions.IgnoreCase);
+        text = Regex.Replace(text, "<[^>]+>", " ");
+        text = Regex.Replace(WebUtility.HtmlDecode(text), @"\s+", " ").Trim();
+        if (text.Length > 220) text = text[..220];
+
+        string tip;
+        if (host.Contains("accounts.google", StringComparison.OrdinalIgnoreCase))
+            tip = "O Google pediu login: o App da Web não está público. Em Implantar > Gerenciar implantações > lápis, deixe \"Quem pode acessar: Qualquer pessoa\", escolha \"Nova versão\" e clique em Implantar.";
+        else if (text.Contains("encontrad", StringComparison.OrdinalIgnoreCase) || text.Contains("not found", StringComparison.OrdinalIgnoreCase))
+            tip = "A implantação não tem o código do TelaRec (função não encontrada). Cole o código completo no editor, salve e use Implantar > Gerenciar implantações > lápis > Versão: \"Nova versão\" > Implantar.";
+        else if (text.Contains("utoriza", StringComparison.OrdinalIgnoreCase) || text.Contains("uthoriz", StringComparison.OrdinalIgnoreCase))
+            tip = "Falta autorizar o script. No editor, escolha a função \"autorizar\", clique em Executar e aceite as permissões; depois crie uma Nova versão da implantação.";
+        else
+            tip = "Confira se o App da Web está com \"Quem pode acessar: Qualquer pessoa\" e se você criou uma NOVA VERSÃO da implantação depois de colar o código.";
+
+        return $"{tip}\n\nDetalhe técnico: HTTP {(int)resp.StatusCode}, servidor {host}, título \"{title}\": {text}";
     }
 
     private static string? Str(JsonElement e, string name) =>

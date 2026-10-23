@@ -104,7 +104,10 @@ public partial class MainWindow
         try
         {
             var r = await DriveUploader.CheckAsync(url, key, folderId, CancellationToken.None);
-            SetDriveStatus(r.Message, r.Ok ? "Green" : "Red");
+            var warn = url.Contains(key, StringComparison.Ordinal)
+                ? "\n\n⚠ Sua chave é igual a um trecho do URL (o ID da implantação). Troque por uma chave diferente: altere CHAVE no script, salve e crie uma Nova versão da implantação."
+                : "";
+            SetDriveStatus(r.Message + warn, r.Ok ? "Green" : "Red");
         }
         finally { DriveTestButton.IsEnabled = true; }
     }
