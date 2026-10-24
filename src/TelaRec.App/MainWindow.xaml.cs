@@ -341,7 +341,7 @@ public partial class MainWindow : Window
             var err = await _rec.StartAsync(target, allowGdi, cfg.Fps, cfg.Quality, enc, path, audio);
             if (err != null)
             {
-                ShowError(err);
+                ShowErrorWithLog(err);
                 ApplyState(RecState.Error);
                 return;
             }
@@ -622,6 +622,29 @@ public partial class MainWindow : Window
     private void ShowInfo(string text) => SetMessage(text, (Brush)FindResource("Text"), false);
     private void ShowError(string text) => SetMessage(text, (Brush)FindResource("Red"), false);
 
+    private string? _logPath;
+
+    /// <summary>Erro com botão "Abrir relatório" (relatório técnico da última gravação).</summary>
+    private void ShowErrorWithLog(string text)
+    {
+        _logPath = Recorder.LogPath;
+        SetMessage(text + "\n\nRelatório técnico salvo em: " + _logPath, (Brush)FindResource("Red"), true);
+        OpenFolderButton.Visibility = Visibility.Collapsed;
+        PlayButton.Visibility = Visibility.Collapsed;
+        DriveButton.Visibility = Visibility.Collapsed;
+        LogButton.Visibility = Visibility.Visible;
+    }
+
+    private void LogButton_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            if (_logPath != null && File.Exists(_logPath))
+                Process.Start(new ProcessStartInfo("notepad.exe", $"\"{_logPath}\"") { UseShellExecute = true });
+        }
+        catch (Exception ex) { ShowError("Não foi possível abrir o relatório: " + ex.Message); }
+    }
+
     private void SetMessage(string text, Brush color, bool actions)
     {
         MessageText.Text = text; MessageText.Foreground = color;
@@ -640,7 +663,11 @@ public partial class MainWindow : Window
         if (r.Ignored) return;
         _lastFile = r.FilePath;
         _folderToOpen = r.FilePath != null ? System.IO.Path.GetDirectoryName(r.FilePath) : r.KeptFolder;
-        SetMessage(r.Message, (Brush)FindResource(r.Success ? "Green" : "Red"), _folderToOpen != null);
+        _logPath = r.LogPath;
+        bool showLog = !r.Success && r.LogPath != null;
+        SetMessage(r.Message, (Brush)FindResource(r.Success ? "Green" : "Red"), _folderToOpen != null || showLog);
+        OpenFolderButton.Visibility = _folderToOpen != null ? Visibility.Visible : Visibility.Collapsed;
+        LogButton.Visibility = showLog ? Visibility.Visible : Visibility.Collapsed;
         PlayButton.Visibility = _lastFile != null ? Visibility.Visible : Visibility.Collapsed;
         DriveButton.Visibility = (_lastFile != null && DriveConfigured()) ? Visibility.Visible : Visibility.Collapsed;
         if (r.Success && r.FilePath != null) _ = OfferDriveAsync(r.FilePath);

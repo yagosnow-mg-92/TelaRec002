@@ -61,3 +61,5 @@ Marque conforme for validando. Para cada item anote Windows, GPU e resultado.
 | 51 | "Testar conexão" com script só-leitura (sem rodar "autorizar" de novo): avisa que falta permissão de criar arquivos | ☐ |
 | 52 | "Testar envio": arquivo TelaRec-teste-….txt chega à pasta e é removido; resultado verde | ☐ |
 | 53 | Depois do teste verde, enviar um vídeo real: sobe, abre pelo link e o tamanho confere | ☐ |
+| 54 | Gravar 3 s com som do computador, depois com microfone, depois com os dois: o MP4 sai com vídeo do tamanho certo em todos | ☐ |
+| 55 | Provocar falha de áudio (desabilitar o dispositivo de saída/mic no Windows): aparece aviso, o vídeo é salvo (com ou sem áudio) e "Abrir relatório" abre o log | ☐ |

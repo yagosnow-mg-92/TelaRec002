@@ -35,6 +35,8 @@ As duas fontes são mixadas em uma só faixa AAC (160 kbps, 48 kHz estéreo). Co
 
 **Sincronia:** o áudio chega ao FFmpeg por um pipe, que não carrega relógio próprio. Por isso o programa (1) reduz a análise inicial da entrada de áudio (sem isso o FFmpeg demorava ~1 s para iniciar o vídeo e o som saía atrasado) e (2) só começa a enviar o áudio real quando o **primeiro quadro de vídeo** aparece (detectado pelo filtro `showinfo`). Assim o som já nasce alinhado com a imagem, sem depender de uma estimativa. Há ainda um **Ajuste fino da sincronia (ms)** (padrão 0; positivo atrasa o som, negativo adianta) para eventuais diferenças do seu equipamento. A sincronia em hardware real ainda precisa ser confirmada.
 
+**Se o áudio der problema:** o programa confere, ao iniciar, se o vídeo realmente começou junto com o áudio. Se não começar, tenta outras combinações e, como última opção, grava **sem áudio** (com um aviso) em vez de perder o vídeo. Ao terminar, o áudio é sempre completado com silêncio até o tamanho do vídeo, para que um problema de áudio nunca corte o vídeo. Em qualquer falha aparece o botão **Abrir relatório**, que abre `%LOCALAPPDATA%\TelaRec\logs\ultima-gravacao.log` (comando do FFmpeg, linha do tempo do áudio e mensagens do FFmpeg) — envie esse arquivo ao suporte.
+
 **Permissão do microfone:** se a barra de teste não mexer, confira *Configurações do Windows → Privacidade e segurança → Microfone* e permita que **aplicativos de desktop** usem o microfone.
 
 ## Envio ao Google Drive (opcional)

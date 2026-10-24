@@ -13,6 +13,7 @@ public sealed class RecordingResult
     public bool Ignored { get; set; }
     public string? FilePath { get; set; }
     public string? KeptFolder { get; set; }
+    public string? LogPath { get; set; }
     public string Message { get; set; } = "";
 }
 
@@ -37,6 +38,33 @@ public sealed class Recorder : IDisposable
     private string _finalPath = "";
     private string _tempDir = "";
     private AudioOptions _audioOpt = AudioOptions.None;
+    private readonly StringBuilder _diag = new();
+
+    /// <summary>Relatório técnico da última gravação (comandos, linha do tempo e saída do FFmpeg).</summary>
+    public static string LogPath => Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "TelaRec", "logs", "ultima-gravacao.log");
+
+    private void Note(string s) { lock (_diag) _diag.AppendLine($"[{DateTime.Now:HH:mm:ss.fff}] {s}"); }
+
+    private void WriteLog(string finalMessage)
+    {
+        try
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(LogPath)!);
+            var sb = new StringBuilder();
+            sb.AppendLine("TelaRec - relatório da última gravação");
+            sb.AppendLine("Data: " + DateTime.Now);
+            sb.AppendLine("Resultado: " + finalMessage);
+            sb.AppendLine();
+            lock (_diag) sb.Append(_diag);
+            sb.AppendLine();
+            sb.AppendLine("--- saída do FFmpeg (sem as linhas por quadro) ---");
+            string t; lock (_log) t = _log.ToString();
+            sb.AppendLine(t);
+            File.WriteAllText(LogPath, sb.ToString(), Encoding.UTF8);
+        }
+        catch { /* o relatório é só um auxílio */ }
+    }
     private AudioPipeline? _audio;
     private volatile bool _startingUp;
     private volatile bool _stoppingExpected;
@@ -63,6 +91,8 @@ public sealed class Recorder : IDisposable
 
         _monitor = monitor; _fps = fps; _quality = quality; _finalPath = finalPath;
         _audioOpt = audio ?? AudioOptions.None;
+        lock (_diag) _diag.Clear();
+        Note($"Início da gravação: monitor {monitor.Name} ({monitor.Resolution}), {fps} FPS, qualidade {quality}, codificador pedido {requested}.");
 
         try
         {
@@ -105,8 +135,30 @@ public sealed class Recorder : IDisposable
             }
         }
 
+        // Última chance: se nenhuma tentativa COM áudio funcionou, grava SEM áudio (melhor um vídeo mudo que nenhum vídeo).
+        if (err != null && _audioOpt.Any)
+        {
+            Note("Todas as tentativas com áudio falharam (" + err + "). Tentando sem áudio.");
+            var saved = _audioOpt;
+            _audioOpt = AudioOptions.None;
+            foreach (var (mode, enc) in attempts)
+            {
+                err = await LaunchSegmentAsync(mode, enc);
+                if (err == null)
+                {
+                    _mode = mode; _enc = enc;
+                    Warning?.Invoke("Aviso: não foi possível iniciar a gravação COM áudio; este vídeo está sendo gravado SEM ÁUDIO. " +
+                                    "Use o botão \"Abrir relatório\" ao terminar e envie o conteúdo ao suporte.");
+                    break;
+                }
+            }
+            if (err != null) _audioOpt = saved;
+        }
+
         if (err != null)
         {
+            Note("Falha final ao iniciar: " + err);
+            WriteLog("Falha ao iniciar a captura: " + err);
             CleanupTemp();
             return "Falha ao iniciar a captura: " + err;
         }
@@ -122,7 +174,14 @@ public sealed class Recorder : IDisposable
         _log = log;
         var firstFrame = new ManualResetEventSlim(false);
         Process p;
-        try { p = Launch(FfmpegArgs.BuildCapture(_monitor!, mode, _fps, _quality, enc, seg, _audioOpt.Any), log, firstFrame); }
+        try
+        {
+            var args = FfmpegArgs.BuildCapture(_monitor!, mode, _fps, _quality, enc, seg, _audioOpt.Any);
+            Note($"Iniciando segmento: captura={mode}, codificador={enc}, áudio=" +
+                 (_audioOpt.Any ? $"sim (sistema={_audioOpt.RecordSystem}, microfone={_audioOpt.RecordMic}, ajuste={_audioOpt.SyncAdjustMs} ms)" : "não"));
+            Note("ffmpeg " + args);
+            p = Launch(args, log, firstFrame);
+        }
         catch (Exception ex) { return "não foi possível iniciar o motor de vídeo (" + ex.Message + ")"; }
 
         _startingUp = true; _proc = p; _sw.Restart();
@@ -133,14 +192,38 @@ public sealed class Recorder : IDisposable
             foreach (var w in _audio.Warnings) Warning?.Invoke(w);
         }
         await Task.Delay(1500);
+
+        // Com áudio, confere que o vídeo realmente começou (1º quadro detectado ou arquivo com dados).
+        if (_audioOpt.Any && !p.HasExited)
+        {
+            var wait = Stopwatch.StartNew();
+            bool Started() => firstFrame.IsSet || (File.Exists(seg) && new FileInfo(seg).Length > 1000);
+            while (wait.ElapsedMilliseconds < 4000 && !p.HasExited && !Started()) await Task.Delay(50);
+            Note(Started() ? $"Vídeo iniciou (1º quadro detectado: {firstFrame.IsSet})." : "O vídeo NÃO iniciou dentro do prazo (5,5 s).");
+            if (!Started() && !p.HasExited)
+            {
+                _proc = null; _startingUp = false;      // o evento de saída será ignorado
+                try { p.Kill(true); } catch { }
+                try { _audio?.Dispose(); } catch { }
+                if (_audio != null) lock (_diag) foreach (var n in _audio.GetNotes()) _diag.AppendLine("  áudio: " + n);
+                _audio = null;
+                _sw.Reset();
+                var t = LastLines(log);
+                try { p.Dispose(); } catch { }
+                try { if (File.Exists(seg)) File.Delete(seg); } catch { }
+                return "o vídeo não iniciou junto com o áudio" + (string.IsNullOrWhiteSpace(t) ? "." : " (" + t + ").");
+            }
+        }
         _startingUp = false;
 
         if (p.HasExited)
         {
             _sw.Reset(); _proc = null;
             try { _audio?.Dispose(); } catch { }
+            if (_audio != null) lock (_diag) foreach (var n in _audio.GetNotes()) _diag.AppendLine("  áudio: " + n);
             _audio = null;
             var tail = LastLines(log);
+            Note("O FFmpeg encerrou logo após iniciar: " + tail);
             try { p.Dispose(); } catch { }
             try { if (File.Exists(seg)) File.Delete(seg); } catch { }
             return string.IsNullOrWhiteSpace(tail) ? "o codificador encerrou imediatamente." : tail;
@@ -226,6 +309,9 @@ public sealed class Recorder : IDisposable
         var result = await MergeAsync();
         if (interruptionReason != null)
             result.Message = interruptionReason + " " + result.Message;
+        Note("Resultado: " + result.Message);
+        WriteLog(result.Message);
+        if (!result.Success) result.LogPath = LogPath;
         SetState(result.Success ? RecState.Done : RecState.Error);
         return result;
     }
@@ -242,8 +328,10 @@ public sealed class Recorder : IDisposable
                 // Com áudio, o stdin carrega o PCM: ao parar o mixer e fechar o pipe, o FFmpeg encerra
                 // (-shortest) e finaliza o MP4 normalmente.
                 var a = _audio; _audio = null;
-                await Task.Run(() => a.Stop());
+                var videoElapsed = _sw.Elapsed;
+                await Task.Run(() => a.Stop(videoElapsed));
                 try { p.StandardInput.Close(); } catch { }
+                lock (_diag) foreach (var n in a.GetNotes()) _diag.AppendLine("  áudio: " + n);
             }
             else
             {
@@ -280,8 +368,15 @@ public sealed class Recorder : IDisposable
         var valid = _segments.Where(s => File.Exists(s) && new FileInfo(s).Length > 2048).ToList();
         if (valid.Count == 0)
         {
+            var tail = LastLines(_log);
+            Note("Nenhum segmento válido encontrado (arquivos ausentes ou menores que 2 KB).");
             CleanupTemp();
-            return new RecordingResult { Success = false, Message = "Nenhum vídeo foi gravado." };
+            return new RecordingResult
+            {
+                Success = false,
+                Message = "Nenhum vídeo foi gravado." + (_audioOpt.Any ? " (a gravação estava com áudio ligado)" : "") +
+                          (string.IsNullOrWhiteSpace(tail) ? "" : " Detalhe técnico: " + tail),
+            };
         }
 
         var tmpOut = _finalPath + ".tmp";

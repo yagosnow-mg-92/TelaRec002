@@ -248,7 +248,9 @@
                             <Button x:Name="DriveButton" Content="Enviar ao Drive" Style="{StaticResource GhostBtn}"
                                     Height="34" MinWidth="130" FontSize="13" Margin="0,0,8,0" Visibility="Collapsed" Click="DriveButton_Click"/>
                             <Button x:Name="PlayButton" Content="Reproduzir" Style="{StaticResource GhostBtn}"
-                                    Height="34" MinWidth="110" FontSize="13" Margin="0" Click="PlayButton_Click"/>
+                                    Height="34" MinWidth="110" FontSize="13" Margin="0,0,8,0" Click="PlayButton_Click"/>
+                            <Button x:Name="LogButton" Content="Abrir relatório" Style="{StaticResource GhostBtn}"
+                                    Height="34" MinWidth="130" FontSize="13" Margin="0" Visibility="Collapsed" Click="LogButton_Click"/>
                         </StackPanel>
                     </StackPanel>
                 </Border>
