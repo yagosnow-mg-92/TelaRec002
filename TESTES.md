@@ -58,3 +58,6 @@ Marque conforme for validando. Para cada item anote Windows, GPU e resultado.
 | 48 | Cancelar o envio: nenhum arquivo parcial fica no Drive | ☐ |
 | 49 | Pasta em Drive compartilhado (Shared Drive) e em "Meu Drive" | ☐ |
 | 50 | "Enviar automaticamente" ligado: envia sem perguntar; chave não aparece em texto puro no settings.json | ☐ |
+| 51 | "Testar conexão" com script só-leitura (sem rodar "autorizar" de novo): avisa que falta permissão de criar arquivos | ☐ |
+| 52 | "Testar envio": arquivo TelaRec-teste-….txt chega à pasta e é removido; resultado verde | ☐ |
+| 53 | Depois do teste verde, enviar um vídeo real: sobe, abre pelo link e o tamanho confere | ☐ |

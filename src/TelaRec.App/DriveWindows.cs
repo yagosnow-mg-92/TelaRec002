@@ -133,6 +133,7 @@ internal sealed record DriveHelpActions(
     Func<(bool Ok, string Message)> GenerateKey,
     Func<(bool Ok, string Message)> CopyCode,
     Func<Task<(bool Ok, string Message)>> Test,
+    Func<Task<(bool Ok, string Message)>> TestUpload,
     int KeyLine);
 
 /// <summary>Assistente passo a passo para configurar o envio ao Google Drive.</summary>
@@ -182,7 +183,9 @@ internal sealed class DriveHelpWindow : Window
             "No topo do editor, ao lado do botão \"Depuração\", há um menu com o nome de uma função (por exemplo \"doGet\").\n" +
             "   • clique nesse menu e escolha  autorizar;\n   • clique em Executar;\n" +
             "   • na janela \"Autorização necessária\": Revisar permissões → escolha sua conta → \"O Google não verificou este app\" (é normal, o script é seu) → Avançado → \"Acessar projeto sem título (não seguro)\" → Permitir.\n\n" +
-            "Conferência: no \"Registro de execução\" (parte de baixo) aparece \"Execução concluída\"."));
+            "Conferência: no \"Registro de execução\" (parte de baixo) aparece \"Execução concluída\".\n\n" +
+            "Importante: se você já tinha feito este passo com uma versão anterior do código, FAÇA DE NOVO. Esta versão pede também a permissão de criar arquivos no Drive; " +
+            "sem ela o envio falha com \"insufficient authentication scopes\"."));
 
         // ---- Passo 4
         Add(Step("4", "No Google: publicar o script",
@@ -197,9 +200,18 @@ internal sealed class DriveHelpWindow : Window
         var s5 = Status();
         Add(Step("5", "No TelaRec: colar o URL e testar",
             "Cole o URL do app da Web no campo \"URL do App da Web\" da tela principal (a chave já está preenchida) e clique em Testar conexão (pode clicar aqui também).\n" +
-            "Conferência: o resultado fica verde, com o nome da sua pasta e o seu e-mail.",
+            "Conferência: o resultado fica verde, com o nome da sua pasta, o seu e-mail e \"permissão para criar arquivos: OK\". " +
+            "Se avisar que falta permissão, refaça o Passo 3 e crie uma Nova versão (veja abaixo).",
             ButtonsAsync(("Testar conexão", async () => Show(s5, await a.Test()))),
             s5));
+
+        // ---- Passo 6
+        var s6 = Status();
+        Add(Step("6", "No TelaRec: testar o envio de verdade",
+            "Este teste manda um arquivo de texto bem pequeno (\"TelaRec-teste-…txt\") para a sua pasta do Drive e o remove em seguida. " +
+            "Ele confirma que a permissão, a pasta e o envio funcionam antes de você gravar um vídeo.",
+            ButtonsAsync(("Testar envio de um arquivo", async () => Show(s6, await a.TestUpload()))),
+            s6));
 
         // ---- Se mudar depois
         Add(Card(
@@ -215,6 +227,7 @@ internal sealed class DriveHelpWindow : Window
               "• \"Chave inválida\" → a chave do TelaRec é diferente da do script. Gerar nova chave → Copiar código → colar no script → Nova versão.\n" +
               "• \"O script publicado é de uma versão antiga\" → cole o código novo (Passo 2) e crie uma Nova versão.\n" +
               "• \"O Google respondeu com uma página…\" → confira o Passo 4 (\"Qualquer pessoa\") e crie uma Nova versão.\n" +
+              "• \"insufficient authentication scopes\" / \"não tem permissão para criar arquivos\" → no editor do script rode a função \"autorizar\" de novo, aceite as permissões e crie uma Nova versão.\n" +
               "• \"Pasta não encontrada\" → o link da pasta está errado ou a conta que criou o script não tem acesso a ela.\n" +
               "• Qualquer \"Detalhe técnico\" → copie o texto inteiro e envie ao suporte.", muted: true, margin: new Thickness(0, 6, 0, 0))));
 

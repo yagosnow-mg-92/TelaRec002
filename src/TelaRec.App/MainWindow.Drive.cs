@@ -133,9 +133,25 @@ public partial class MainWindow
         return (r.Ok, r.Message + warn);
     }
 
+    private async Task<(bool Ok, string Message)> RunDriveUploadTestAsync()
+    {
+        if (!ValidateDriveFields(out var folderId, out var url, out var key)) return (false, DriveStatus.Text);
+        SetDriveStatus("Enviando um arquivo de texto de teste para a pasta…", "Muted");
+        var r = await DriveUploader.TestUploadAsync(url, key, folderId, CancellationToken.None);
+        SetDriveStatus(r.Message, r.Ok ? "Green" : "Red");
+        return (r.Ok, r.Message);
+    }
+
+    private async void DriveTestUploadButton_Click(object sender, RoutedEventArgs e)
+    {
+        DriveTestUploadButton.IsEnabled = false;
+        try { await RunDriveUploadTestAsync(); }
+        finally { DriveTestUploadButton.IsEnabled = true; }
+    }
+
     private void DriveHelpButton_Click(object sender, RoutedEventArgs e)
     {
-        var actions = new DriveHelpActions(GenerateKeyAction, CopyScriptAction, RunDriveTestAsync, DriveBridgeScript.KeyLine);
+        var actions = new DriveHelpActions(GenerateKeyAction, CopyScriptAction, RunDriveTestAsync, RunDriveUploadTestAsync, DriveBridgeScript.KeyLine);
         new DriveHelpWindow(actions) { Owner = this }.Show();
     }
 

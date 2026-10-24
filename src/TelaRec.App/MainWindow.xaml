@@ -225,7 +225,9 @@
                                 <Button x:Name="DriveCopyScriptButton" Content="Copiar código do script" Style="{StaticResource GhostBtn}"
                                         Height="34" MinWidth="170" FontSize="13" Margin="0,0,10,0" Click="DriveCopyScriptButton_Click"/>
                                 <Button x:Name="DriveTestButton" Content="Testar conexão" Style="{StaticResource GhostBtn}"
-                                        Height="34" MinWidth="140" FontSize="13" Margin="0" Click="DriveTestButton_Click"/>
+                                        Height="34" MinWidth="140" FontSize="13" Margin="0,0,10,0" Click="DriveTestButton_Click"/>
+                                <Button x:Name="DriveTestUploadButton" Content="Testar envio" Style="{StaticResource GhostBtn}"
+                                        Height="34" MinWidth="120" FontSize="13" Margin="0" Click="DriveTestUploadButton_Click"/>
                             </StackPanel>
                             <TextBlock x:Name="DriveStatus" TextWrapping="Wrap" Margin="0,8,0,0" FontSize="12" Foreground="{StaticResource Muted}"/>
                             <CheckBox x:Name="DriveAutoCheck" Margin="0,12,0,0" Foreground="{StaticResource Text}"

@@ -297,6 +297,9 @@ public class DriveTests
     {
         Assert.Contains($"const VERSAO = {DriveBridgeScript.Version};", DriveBridgeScript.Code);
         Assert.Contains("versao: VERSAO", DriveBridgeScript.Code);
+        Assert.Contains("setTrashed", DriveBridgeScript.Code);               // pede o escopo de escrita do Drive
+        Assert.Contains("TelaRec-teste-", DriveBridgeScript.Code);           // só apaga arquivos de teste
+        Assert.Contains("podeEscrever", DriveBridgeScript.Code);             // o teste de conexão detecta falta de permissão
     }
 
     [Fact]

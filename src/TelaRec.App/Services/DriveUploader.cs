@@ -16,6 +16,7 @@ internal sealed class UploadResult
     public bool Success { get; init; }
     public bool Cancelled { get; init; }
     public string? Link { get; init; }
+    public string? FileId { get; init; }
     public string? Error { get; init; }
 }
 
@@ -105,7 +106,12 @@ internal static class DriveUploader
             if (version < TelaRec.Core.DriveBridgeScript.Version)
                 return new DriveCheckResult(false, $"O script publicado é de uma versão antiga ({(version == 0 ? "sem número de versão" : "v" + version)}). " +
                     "Clique em \"Copiar código do script\", cole no script.new (Ctrl+A, Delete, Ctrl+V, Ctrl+S) e crie uma NOVA VERSÃO da implantação.");
-            return new DriveCheckResult(true, $"Conectado! Pasta: \"{Str(r, "folderName")}\" (conta: {Str(r, "owner")}; script v{version}).");
+            if (r.TryGetProperty("podeEscrever", out var pw) && pw.ValueKind == JsonValueKind.False)
+                return new DriveCheckResult(false,
+                    $"Conectado à pasta \"{Str(r, "folderName")}\", mas o script ainda NÃO tem permissão para criar arquivos no Drive (só leitura). " +
+                    "No editor do script: escolha a função \"autorizar\", clique em Executar e aceite as novas permissões; " +
+                    "depois Implantar > Gerenciar implantações > lápis > Versão: Nova versão > Implantar.");
+            return new DriveCheckResult(true, $"Conectado! Pasta: \"{Str(r, "folderName")}\" (conta: {Str(r, "owner")}; script v{version}; permissão para criar arquivos: OK).");
         }
         catch (DriveException ex) { return new DriveCheckResult(false, ex.Message); }
         catch (HttpRequestException ex) { return new DriveCheckResult(false, "Sem conexão com o Google: " + ex.Message); }
@@ -114,7 +120,7 @@ internal static class DriveUploader
     }
 
     public static async Task<UploadResult> UploadAsync(string scriptUrl, string key, string folderId, string path,
-        IProgress<UploadProgress> progress, CancellationToken ct)
+        IProgress<UploadProgress> progress, CancellationToken ct, string mime = "video/mp4")
     {
         string? session = null;
         try
@@ -124,7 +130,7 @@ internal static class DriveUploader
             long total = fi.Length;
             if (total == 0) return new UploadResult { Error = "O arquivo de vídeo está vazio." };
 
-            var start = await CallScriptAsync(scriptUrl, new { key, action = "start", folderId, name = fi.Name, size = total }, ct);
+            var start = await CallScriptAsync(scriptUrl, new { key, action = "start", folderId, name = fi.Name, size = total, mime }, ct);
             if (!IsOk(start)) return new UploadResult { Error = Str(start, "error") ?? "O script recusou o envio." };
             session = Str(start, "sessionUri");
             if (string.IsNullOrEmpty(session)) return new UploadResult { Error = "O script não devolveu o endereço de envio." };
@@ -197,7 +203,7 @@ internal static class DriveUploader
             if (long.TryParse(sizeStr, out var remote) && remote != total)
                 return new UploadResult { Error = $"O tamanho no Drive ({remote} bytes) difere do arquivo local ({total} bytes). Envie novamente." };
             var link = Str(root, "webViewLink") ?? $"https://drive.google.com/file/d/{id}/view";
-            return new UploadResult { Success = true, Link = link };
+            return new UploadResult { Success = true, Link = link, FileId = id };
         }
         catch (OperationCanceledException)
         {
@@ -207,6 +213,35 @@ internal static class DriveUploader
         catch (DriveException ex) { return new UploadResult { Error = ex.Message }; }
         catch (HttpRequestException ex) { return new UploadResult { Error = "Sem conexão com a internet ou com o Google: " + ex.Message }; }
         catch (Exception ex) { return new UploadResult { Error = ex.Message }; }
+    }
+
+    /// <summary>Teste completo: confere a conexão, envia um .txt pequeno à pasta e o remove em seguida.</summary>
+    public static async Task<DriveCheckResult> TestUploadAsync(string url, string key, string folderId, CancellationToken ct)
+    {
+        var check = await CheckAsync(url, key, folderId, ct);
+        if (!check.Ok) return check;
+
+        var name = $"TelaRec-teste-{DateTime.Now:yyyyMMdd-HHmmss}.txt";
+        var tmp = System.IO.Path.Combine(System.IO.Path.GetTempPath(), name);
+        try
+        {
+            await File.WriteAllTextAsync(tmp, "Arquivo de teste do TelaRec. Pode ser apagado.\n" + DateTime.Now, ct);
+            var res = await UploadAsync(url, key, folderId, tmp, new Progress<UploadProgress>(_ => { }), ct, "text/plain");
+            if (!res.Success) return new DriveCheckResult(false, "O envio de teste falhou: " + res.Error);
+
+            string cleanup;
+            try
+            {
+                var d = await CallScriptAsync(url, new { key, action = "delete", fileId = res.FileId }, ct);
+                cleanup = IsOk(d) ? "e foi removido em seguida" : $"mas não foi possível removê-lo automaticamente (apague \"{name}\" da pasta)";
+            }
+            catch { cleanup = $"mas não foi possível removê-lo automaticamente (apague \"{name}\" da pasta)"; }
+            var folderName = check.Message.Split('"').ElementAtOrDefault(1) ?? "";
+            return new DriveCheckResult(true, $"Envio de teste OK! O arquivo \"{name}\" chegou à pasta \"{folderName}\" {cleanup}. O envio de vídeos deve funcionar.");
+        }
+        catch (OperationCanceledException) { return new DriveCheckResult(false, "Teste cancelado."); }
+        catch (Exception ex) { return new DriveCheckResult(false, "O envio de teste falhou: " + ex.Message); }
+        finally { try { File.Delete(tmp); } catch { } }
     }
 
     private static async Task<(int Code, long Next, string Body)> PutAsync(string session, byte[] buf, int len,

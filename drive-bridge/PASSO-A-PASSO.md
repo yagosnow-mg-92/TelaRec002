@@ -31,6 +31,8 @@ Você **não precisa digitar nem editar a chave no script**: o botão "Copiar c�
 
 ✅ Teste: no "Registro de execução" aparece "Execução concluída".
 
+Se você já tinha autorizado uma versão anterior do código, **autorize de novo**: a versão atual também pede permissão para criar arquivos no Drive (sem ela o envio falha com "insufficient authentication scopes").
+
 ## Etapa 4 — Publicar
 1. **Implantar** → **Nova implantação**.
 2. Na engrenagem ao lado de "Selecione o tipo", escolha **App da Web**.
@@ -46,10 +48,15 @@ Você **não precisa digitar nem editar a chave no script**: o botão "Copiar c�
 | Tela de login do Google | O acesso não está em "Qualquer pessoa" → **Etapa 6**, e confira o campo "Quem pode acessar" |
 | "Função de script não encontrada" | A publicação tem código antigo/vazio → confira a Etapa 2 e faça a **Etapa 6** |
 | Pedido de autorização | Refaça a Etapa 3 e depois a **Etapa 6** |
+| Erro "insufficient authentication scopes" | O script só tem permissão de leitura → refaça a Etapa 3 (função `autorizar`) e a **Etapa 6** |
 
 ## Etapa 5 — Testar no TelaRec
 Cole o **URL do app da Web** no campo "URL do App da Web" e clique em **Testar conexão**.
 ✅ Deve ficar verde: *Conectado! Pasta: "..." (conta: ...)*.
+
+## Etapa 5b — Testar o envio de verdade
+Clique em **Testar envio**: o programa manda um arquivo de texto pequeno (`TelaRec-teste-….txt`) para a pasta e o remove em seguida.
+✅ Deve ficar verde: *Envio de teste OK!*
 
 Pronto! A partir daí, ao finalizar cada gravação o TelaRec pergunta se quer enviar ao Drive e mostra o link do vídeo.
 
