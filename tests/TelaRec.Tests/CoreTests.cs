@@ -136,7 +136,7 @@ public class AudioTests
         var a = FfmpegArgs.BuildCapture(Mon(), CaptureMode.Dxgi, 30, VideoQuality.Balanced, VideoEncoder.Cpu, "a.mp4");
         Assert.DoesNotContain("pipe:0", a);
         Assert.DoesNotContain("aac", a);
-        Assert.DoesNotContain("showinfo", a);
+        Assert.Contains("showinfo", a);   // também sem áudio: marca o 1º quadro real
     }
 
     [Theory]

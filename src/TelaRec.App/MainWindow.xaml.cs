@@ -28,11 +28,12 @@ public partial class MainWindow : Window
     private readonly Dictionary<string, BitmapSource?> _thumbs = new();
     private Recorder? _rec;
     private VideoEncoder _hw = VideoEncoder.Cpu;
-    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(250) };
+    private readonly DispatcherTimer _timer = new() { Interval = TimeSpan.FromMilliseconds(100) };
     private int _ticks;
     private bool _busy, _closing, _closeAfter, _warnedDisk;
     private string? _lastFile, _folderToOpen;
     private bool _affinityApplied;
+    private bool _resuming;
     private readonly Dictionary<string, Border> _cards = new();
     private readonly MouseHook _hook = new();
     private ClickOverlay? _overlay;
@@ -167,8 +168,8 @@ public partial class MainWindow : Window
     /// <summary>Atualiza as miniaturas ~1x por segundo para mostrar o conteúdo ao vivo de cada tela.</summary>
     private void LiveTick()
     {
-        if (_rec == null || WindowState == WindowState.Minimized || !IsVisible) return;
-        if (_rec.State is RecState.Recording or RecState.Paused or RecState.Finalizing) return;
+        if (_rec == null || _busy || WindowState == WindowState.Minimized || !IsVisible) return;
+        if (_rec.State is RecState.Starting or RecState.Recording or RecState.Paused or RecState.Finalizing) return;
         foreach (var m in _monitors)
         {
             if (!_cards.TryGetValue(m.DeviceName, out var card)) continue;
@@ -183,7 +184,7 @@ public partial class MainWindow : Window
 
     private void SelectMonitor(MonitorInfo m)
     {
-        if (_rec != null && _rec.State is RecState.Recording or RecState.Paused or RecState.Finalizing) return;
+        if (_rec != null && _rec.State is RecState.Starting or RecState.Recording or RecState.Paused or RecState.Finalizing) return;
         _selected = m;
         DrawMonitors();
         UpdateSelectedInfo();
@@ -281,6 +282,41 @@ public partial class MainWindow : Window
         return _cfg;
     }
 
+    private sealed record StartPrep(List<MonitorInfo> Monitors, MonitorInfo? Target, string Path, bool AllowGdi, string? Error);
+
+    /// <summary>Trabalho pesado do início da gravação, fora da thread da interface (não mexe em controles).</summary>
+    private static StartPrep PrepareRecording(AppSettings cfg, string settingsPath, MonitorInfo selected)
+    {
+        cfg.Save(settingsPath);
+
+        // Revalida o monitor imediatamente antes de gravar (evita gravar a tela errada).
+        var fresh = DxgiMap.Annotate(MonitorEnumerator.GetAll());
+        var target = fresh.FirstOrDefault(m => m.DeviceName == selected.DeviceName);
+        if (target == null)
+            return new StartPrep(fresh, null, "", false, "O monitor selecionado não está mais disponível. Selecione outro e tente novamente.");
+
+        long? free = DiskSpace.FreeBytes(cfg.OutputFolder);
+        if (free != null && free < 500L * 1024 * 1024)
+            return new StartPrep(fresh, target, "", false, $"Espaço em disco insuficiente ({TimeFormat.Bytes(free.Value)} livres). Libere espaço ou escolha outra pasta.");
+
+        var name = FileNamer.Sanitize(cfg.FileName);
+        if (name.Length == 0) name = FileNamer.DefaultName(DateTime.Now);
+        string path;
+        try { path = FileNamer.UniquePath(cfg.OutputFolder, name); }
+        catch (Exception ex) { return new StartPrep(fresh, target, "", false, "Pasta de destino inválida: " + ex.Message); }
+
+        return new StartPrep(fresh, target, path, fresh.All(m => m.DpiPercent == 100), null);
+    }
+
+    private void FailStart(string message, bool withLog)
+    {
+        _timer.Stop();
+        ClearCaptureExclusion();
+        StopClickFx();
+        if (withLog) ShowErrorWithLog(message); else ShowError(message);
+        ApplyState(withLog ? RecState.Error : RecState.Ready);
+    }
+
     private async void RecButton_Click(object sender, RoutedEventArgs e)
     {
         if (_busy || _rec == null || _selected == null) return;
@@ -288,21 +324,7 @@ public partial class MainWindow : Window
         try
         {
             var cfg = ReadSettings();
-            cfg.Save(_settingsPath);
-
             if (string.IsNullOrWhiteSpace(cfg.OutputFolder)) { ShowError("Escolha uma pasta para salvar os vídeos."); return; }
-
-            // Revalida o monitor imediatamente antes de gravar (evita gravar a tela errada).
-            var fresh = DxgiMap.Annotate(MonitorEnumerator.GetAll());
-            _monitors = fresh;
-            var target = fresh.FirstOrDefault(m => m.DeviceName == _selected.DeviceName);
-            if (target == null)
-            {
-                RefreshMonitors();
-                ShowError("O monitor selecionado não está mais disponível. Selecione outro e tente novamente.");
-                return;
-            }
-            if (!target.SameGeometryAs(_selected)) _selected = target;
 
             var mic = SelectedMic;
             if (cfg.RecordMic && mic == null)
@@ -315,60 +337,57 @@ public partial class MainWindow : Window
                 ? new AudioOptions(cfg.RecordSystemAudio, cfg.RecordMic, mic?.Id, cfg.SystemGainPct / 100f,
                     cfg.MicGainPct / 100f, cfg.Denoise, cfg.DenoiseLevel, cfg.AudioSyncAdjustMs)
                 : AudioOptions.None;
-
-            long? free = DiskSpace.FreeBytes(cfg.OutputFolder);
-            if (free != null && free < 500L * 1024 * 1024)
-            {
-                ShowError($"Espaço em disco insuficiente ({TimeFormat.Bytes(free.Value)} livres). Libere espaço ou escolha outra pasta.");
-                return;
-            }
-
-            var name = FileNamer.Sanitize(cfg.FileName);
-            if (name.Length == 0) name = FileNamer.DefaultName(DateTime.Now);
-            string path;
-            try { path = FileNamer.UniquePath(cfg.OutputFolder, name); }
-            catch (Exception ex) { ShowError("Pasta de destino inválida: " + ex.Message); return; }
-
-            bool allowGdi = fresh.All(m => m.DpiPercent == 100);
             var enc = cfg.UseHardware ? _hw : VideoEncoder.Cpu;
 
-            RecButton.IsEnabled = false;
-            ShowInfo("Iniciando a captura…");
-            _warnedDisk = false; _ticks = 0;
+            // Resposta imediata: a interface já mostra "Iniciando…" antes de qualquer trabalho pesado.
+            HideMessage();
+            _lastFile = null; _warnedDisk = false; _ticks = 0; _resuming = false;
             TimerText.Text = "00:00:00";
+            _fxEnabled = cfg.ClickEffect; _fxSound = cfg.ClickSound; _recTarget = _selected;
+            ApplyState(RecState.Starting);
+            _timer.Start();
 
-            _fxEnabled = cfg.ClickEffect; _fxSound = cfg.ClickSound; _recTarget = target;
-            var err = await _rec.StartAsync(target, allowGdi, cfg.Fps, cfg.Quality, enc, path, audio);
-            if (err != null)
+            var selected = _selected!;
+            var prep = await Task.Run(() => PrepareRecording(cfg, _settingsPath, selected));
+            _monitors = prep.Monitors;
+            if (prep.Target == null || prep.Error != null)
             {
-                ShowErrorWithLog(err);
-                ApplyState(RecState.Error);
+                if (prep.Target == null) RefreshMonitors();
+                FailStart(prep.Error ?? "Não foi possível preparar a gravação.", withLog: false);
                 return;
             }
+            if (!prep.Target.SameGeometryAs(_selected)) _selected = prep.Target;
+            _recTarget = prep.Target;
 
-            _lastFile = null;
-            if (!string.IsNullOrEmpty(cfg.OutputFolder)) HideMessageIfNoWarning();
+            // Antes do 1º quadro: esta janela não deve aparecer no vídeo.
             SetCaptureExclusion(cfg.HideWindowFromCapture);
-            _timer.Start();
+
+            var err = await _rec.StartAsync(prep.Target, prep.AllowGdi, cfg.Fps, cfg.Quality, enc, prep.Path, audio);
+            if (err != null) { FailStart(err, withLog: true); return; }
         }
         finally { _busy = false; }
     }
 
     private async void PauseButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_busy || _rec == null) return;
-        _busy = true;
-        PauseButton.IsEnabled = false;
-        try
+        if (_rec == null) return;
+        if (_rec.State == RecState.Recording)
         {
-            if (_rec.State == RecState.Recording) await _rec.PauseAsync();
-            else if (_rec.State == RecState.Paused)
+            await _rec.PauseAsync();      // congela o cronômetro e muda a interface na hora
+            return;
+        }
+        if (_rec.State == RecState.Paused)
+        {
+            _resuming = true;
+            ApplyState(RecState.Starting);   // resposta imediata ("Retomando…")
+            var err = await _rec.ResumeAsync();
+            if (err != null)
             {
-                var err = await _rec.ResumeAsync();
-                if (err != null) ShowError(err);
+                _resuming = false;
+                ShowError(err);
+                ApplyState(RecState.Paused);
             }
         }
-        finally { _busy = false; PauseButton.IsEnabled = true; }
     }
 
     private async void StopButton_Click(object sender, RoutedEventArgs e)
@@ -389,7 +408,7 @@ public partial class MainWindow : Window
         if (_rec == null) return;
         TimerText.Text = TimeFormat.Format(_rec.Elapsed);
         if (_rec.State != RecState.Recording) return;
-        if (++_ticks % 20 == 0) _ = CheckDiskAsync();
+        if (++_ticks % 50 == 0) _ = CheckDiskAsync();
     }
 
     private async Task CheckDiskAsync()
@@ -410,6 +429,10 @@ public partial class MainWindow : Window
     }
 
     // ------------------------------------------------------------------ estado da interface
+    private void Pulse(double minOpacity) =>
+        StatusDot.BeginAnimation(OpacityProperty, new DoubleAnimation(1, minOpacity, TimeSpan.FromMilliseconds(700))
+        { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
+
     private void ApplyState(RecState s)
     {
         var green = (Brush)FindResource("Green");
@@ -419,36 +442,50 @@ public partial class MainWindow : Window
 
         StatusDot.BeginAnimation(OpacityProperty, null);
         StatusDot.Opacity = 1;
-        bool active = s is RecState.Recording or RecState.Paused or RecState.Finalizing;
+        bool active = s is RecState.Starting or RecState.Recording or RecState.Paused or RecState.Finalizing;
+        bool controls = s is RecState.Starting or RecState.Recording or RecState.Paused;
+        bool live = s is RecState.Recording or RecState.Paused;
 
         SettingsPanel.IsEnabled = !active;
         AudioPanel.IsEnabled = !active;
         RefreshButton.IsEnabled = !active;
-        RecButton.Visibility = (s is RecState.Recording or RecState.Paused or RecState.Finalizing) ? Visibility.Collapsed : Visibility.Visible;
-        PauseButton.Visibility = (s is RecState.Recording or RecState.Paused) ? Visibility.Visible : Visibility.Collapsed;
-        StopButton.Visibility = (s is RecState.Recording or RecState.Paused) ? Visibility.Visible : Visibility.Collapsed;
+        RecButton.Visibility = active ? Visibility.Collapsed : Visibility.Visible;
+        PauseButton.Visibility = controls ? Visibility.Visible : Visibility.Collapsed;
+        StopButton.Visibility = controls ? Visibility.Visible : Visibility.Collapsed;
+        PauseButton.IsEnabled = live;     // durante "Iniciando/Retomando" os botões aparecem, mas aguardam
+        StopButton.IsEnabled = live;
 
         switch (s)
         {
             case RecState.Ready:
+                _resuming = false;
                 StatusDot.Fill = green; StatusText.Text = "Pronto para gravar"; Title = "TelaRec"; StopClickFx();
                 RecButton.IsEnabled = _monitors.Count > 0; break;
-            case RecState.Recording:
-                StatusDot.Fill = red; StatusText.Text = "Gravando"; Title = "● Gravando — TelaRec"; StartClickFx();
+            case RecState.Starting:
+                StatusDot.Fill = accent; StatusText.Text = _resuming ? "Retomando a gravação…" : "Iniciando a gravação…"; Title = "TelaRec";
                 PauseButton.Content = "Pausar";
-                StatusDot.BeginAnimation(OpacityProperty, new DoubleAnimation(1, 0.25, TimeSpan.FromMilliseconds(700))
-                { AutoReverse = true, RepeatBehavior = RepeatBehavior.Forever });
+                Pulse(0.35); break;
+            case RecState.Recording:
+                _resuming = false;
+                StatusDot.Fill = red; StatusText.Text = "Gravando"; Title = "● Gravando — TelaRec";
+                PauseButton.Content = "Pausar";
+                Pulse(0.25);
+                // O efeito de clique (janela + hook) é preparado com a interface já atualizada, sem travá-la.
+                Dispatcher.InvokeAsync(() => { if (_rec?.State == RecState.Recording) StartClickFx(); }, DispatcherPriority.ApplicationIdle);
                 break;
             case RecState.Paused:
+                _resuming = false;
                 StatusDot.Fill = amber; StatusText.Text = "Gravação pausada"; Title = "⏸ Pausado — TelaRec"; PauseClickFx();
                 PauseButton.Content = "Retomar"; break;
             case RecState.Finalizing:
                 StatusDot.Fill = accent; StatusText.Text = "Finalizando e salvando o vídeo…"; PauseClickFx(); break;
             case RecState.Done:
+                _resuming = false;
                 _timer.Stop(); ClearCaptureExclusion(); StopClickFx(); TimerText.Text = "00:00:00";
                 StatusDot.Fill = green; StatusText.Text = "Gravação concluída"; Title = "TelaRec";
                 RecButton.IsEnabled = _monitors.Count > 0; break;
             case RecState.Error:
+                _resuming = false;
                 _timer.Stop(); ClearCaptureExclusion(); StopClickFx(); TimerText.Text = "00:00:00";
                 StatusDot.Fill = red; StatusText.Text = "Erro de gravação"; Title = "TelaRec";
                 RecButton.IsEnabled = _monitors.Count > 0; break;
@@ -703,9 +740,10 @@ public partial class MainWindow : Window
     {
         if (_closing) { ReadSettings().Save(_settingsPath); _rec?.Dispose(); return; }
         var rec = _rec;
-        if (rec != null && rec.State is RecState.Recording or RecState.Paused or RecState.Finalizing)
+        if (rec != null && rec.State is RecState.Starting or RecState.Recording or RecState.Paused or RecState.Finalizing)
         {
             e.Cancel = true;
+            if (rec.State == RecState.Starting) return;            // aguarde a gravação iniciar
             if (rec.State == RecState.Finalizing) { _closeAfter = true; return; }
 
             var ans = MessageBox.Show(this,

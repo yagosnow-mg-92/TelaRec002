@@ -35,8 +35,9 @@ public static class FfmpegArgs
         // -probesize/-analyzeduration mínimos: sem isso o FFmpeg espera ~1 s lendo o pipe de áudio antes de
         // iniciar o vídeo, e o som sai atrasado. O showinfo avisa (no stderr) quando o 1º quadro de vídeo existe.
         string audioIn = audio ? "-probesize 32 -analyzeduration 1 -thread_queue_size 512 -f s16le -ar 48000 -ac 2 -i pipe:0 " : "";
-        string tail = audio ? Tail + ",showinfo" : Tail;
-        string level = audio ? "info -nostats" : "error";
+        // showinfo: o FFmpeg escreve uma linha por quadro; o 1º marca o início real do vídeo (cronômetro e sincronia do áudio).
+        string tail = Tail + ",showinfo";
+        string level = "info -nostats";
         string audioOut = audio ? "-c:a aac -b:a 160k -ar 48000 -ac 2 -shortest " : "";
         string common = $"{EncoderArgs(e, q)} -g {fps * 2} {ColorTags} -fps_mode cfr -r {fps} {audioOut}{FragFlags} -f mp4 {Quote(output)}";
 

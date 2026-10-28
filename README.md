@@ -22,6 +22,10 @@ O executável tem ~60–80 MB porque embute o .NET e o FFmpeg. Na primeira execu
 3. Escolha pasta, nome (opcional), FPS e qualidade.
 4. **Iniciar gravação** → **Pausar/Retomar** → **Finalizar**. O tempo em pausa não entra no vídeo.
 
+## Fluidez ao iniciar, pausar e retomar
+
+A interface responde na hora: ao clicar, o botão já muda para "Iniciando…" / "Retomando…", enquanto o trabalho pesado (abrir o FFmpeg, preparar o áudio, conferir o monitor e o disco) roda em segundo plano. O cronômetro só começa a contar quando o **primeiro quadro de vídeo real** existe, então ele não "salta" e o tempo mostrado é o tempo realmente gravado. A **pausa** congela o cronômetro e atualiza a tela imediatamente; o fechamento do trecho acontece em segundo plano. O tempo até a gravação efetivamente começar (iniciar o FFmpeg e a captura da tela) ainda leva uma fração de segundo, que depende do computador e do codificador.
+
 ## Áudio (opcional)
 
 Em **Áudio**, duas opções independentes (ambas vêm desligadas):

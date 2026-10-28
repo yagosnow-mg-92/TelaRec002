@@ -63,3 +63,6 @@ Marque conforme for validando. Para cada item anote Windows, GPU e resultado.
 | 53 | Depois do teste verde, enviar um vídeo real: sobe, abre pelo link e o tamanho confere | ☐ |
 | 54 | Gravar 3 s com som do computador, depois com microfone, depois com os dois: o MP4 sai com vídeo do tamanho certo em todos | ☐ |
 | 55 | Provocar falha de áudio (desabilitar o dispositivo de saída/mic no Windows): aparece aviso, o vídeo é salvo (com ou sem áudio) e "Abrir relatório" abre o log | ☐ |
+| 56 | Clicar em "Iniciar gravação": o botão muda na hora para "Iniciando…" e o cronômetro começa em 00:00:00 e conta sem "pular" | ☐ |
+| 57 | Pausar: cronômetro congela e a tela muda na hora; Retomar: mostra "Retomando…" e volta a contar a partir do valor anterior | ☐ |
+| 58 | Pausar e retomar várias vezes rápido, e finalizar logo depois de pausar: o vídeo final tem todos os trechos e abre normalmente | ☐ |

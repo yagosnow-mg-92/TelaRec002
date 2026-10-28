@@ -5,7 +5,7 @@ using TelaRec.Core;
 
 namespace TelaRec.Services;
 
-public enum RecState { Ready, Recording, Paused, Finalizing, Done, Error }
+public enum RecState { Ready, Starting, Recording, Paused, Finalizing, Done, Error }
 
 public sealed class RecordingResult
 {
@@ -86,8 +86,17 @@ public sealed class Recorder : IDisposable
     public async Task<string?> StartAsync(MonitorInfo monitor, bool allowGdi, int fps, VideoQuality quality,
         VideoEncoder requested, string finalPath, AudioOptions? audio = null)
     {
-        if (State is RecState.Recording or RecState.Paused or RecState.Finalizing)
+        if (State is RecState.Starting or RecState.Recording or RecState.Paused or RecState.Finalizing)
             return "Já existe uma gravação em andamento.";
+        SetState(RecState.Starting);      // a interface mostra "Iniciando…" na hora
+        var err = await StartCoreAsync(monitor, allowGdi, fps, quality, requested, finalPath, audio);
+        if (err != null) State = RecState.Ready;   // sem evento: a interface exibe o erro
+        return err;
+    }
+
+    private async Task<string?> StartCoreAsync(MonitorInfo monitor, bool allowGdi, int fps, VideoQuality quality,
+        VideoEncoder requested, string finalPath, AudioOptions? audio = null)
+    {
 
         _monitor = monitor; _fps = fps; _quality = quality; _finalPath = finalPath;
         _audioOpt = audio ?? AudioOptions.None;
@@ -173,54 +182,61 @@ public sealed class Recorder : IDisposable
         var log = new StringBuilder();
         _log = log;
         var firstFrame = new ManualResetEventSlim(false);
+        _startingUp = true;
         Process p;
+        AudioPipeline? audio;
         try
         {
             var args = FfmpegArgs.BuildCapture(_monitor!, mode, _fps, _quality, enc, seg, _audioOpt.Any);
             Note($"Iniciando segmento: captura={mode}, codificador={enc}, áudio=" +
                  (_audioOpt.Any ? $"sim (sistema={_audioOpt.RecordSystem}, microfone={_audioOpt.RecordMic}, ajuste={_audioOpt.SyncAdjustMs} ms)" : "não"));
             Note("ffmpeg " + args);
-            p = Launch(args, log, firstFrame);
-        }
-        catch (Exception ex) { return "não foi possível iniciar o motor de vídeo (" + ex.Message + ")"; }
-
-        _startingUp = true; _proc = p; _sw.Restart();
-        if (_audioOpt.Any)
-        {
-            _audio = new AudioPipeline(_audioOpt);
-            _audio.Start(p.StandardInput.BaseStream, firstFrame);
-            foreach (var w in _audio.Warnings) Warning?.Invoke(w);
-        }
-        await Task.Delay(1500);
-
-        // Com áudio, confere que o vídeo realmente começou (1º quadro detectado ou arquivo com dados).
-        if (_audioOpt.Any && !p.HasExited)
-        {
-            var wait = Stopwatch.StartNew();
-            bool Started() => firstFrame.IsSet || (File.Exists(seg) && new FileInfo(seg).Length > 1000);
-            while (wait.ElapsedMilliseconds < 4000 && !p.HasExited && !Started()) await Task.Delay(50);
-            Note(Started() ? $"Vídeo iniciou (1º quadro detectado: {firstFrame.IsSet})." : "O vídeo NÃO iniciou dentro do prazo (5,5 s).");
-            if (!Started() && !p.HasExited)
+            // Iniciar o processo e preparar o áudio (enumerar dispositivos) é lento: fora da thread da interface.
+            (p, audio) = await Task.Run(() =>
             {
-                _proc = null; _startingUp = false;      // o evento de saída será ignorado
-                try { p.Kill(true); } catch { }
-                try { _audio?.Dispose(); } catch { }
-                if (_audio != null) lock (_diag) foreach (var n in _audio.GetNotes()) _diag.AppendLine("  áudio: " + n);
-                _audio = null;
-                _sw.Reset();
-                var t = LastLines(log);
-                try { p.Dispose(); } catch { }
-                try { if (File.Exists(seg)) File.Delete(seg); } catch { }
-                return "o vídeo não iniciou junto com o áudio" + (string.IsNullOrWhiteSpace(t) ? "." : " (" + t + ").");
-            }
+                var proc = Launch(args, log, firstFrame);
+                AudioPipeline? ap = null;
+                if (_audioOpt.Any)
+                {
+                    ap = new AudioPipeline(_audioOpt);
+                    ap.Start(proc.StandardInput.BaseStream, firstFrame);
+                }
+                return (proc, ap);
+            });
+        }
+        catch (Exception ex) { _startingUp = false; return "não foi possível iniciar o motor de vídeo (" + ex.Message + ")"; }
+
+        _proc = p; _audio = audio;
+        if (audio != null) foreach (var w in audio.Warnings) Warning?.Invoke(w);
+
+        // Espera o 1º quadro de vídeo real (em vez de uma pausa fixa). O cronômetro só começa nesse instante.
+        var wait = Stopwatch.StartNew();
+        bool Started() => firstFrame.IsSet || (File.Exists(seg) && new FileInfo(seg).Length > 1000);
+        while (wait.ElapsedMilliseconds < 8000 && !p.HasExited && !Started()) await Task.Delay(15);
+        bool started = Started();
+        Note(started ? $"Vídeo iniciou em {wait.ElapsedMilliseconds} ms (1º quadro detectado: {firstFrame.IsSet})."
+                     : "O vídeo NÃO iniciou dentro do prazo (8 s).");
+
+        if (!started && !p.HasExited)
+        {
+            _proc = null; _startingUp = false;      // o evento de saída será ignorado
+            try { p.Kill(true); } catch { }
+            try { audio?.Dispose(); } catch { }
+            if (audio != null) lock (_diag) foreach (var n in audio.GetNotes()) _diag.AppendLine("  áudio: " + n);
+            _audio = null;
+            var t = LastLines(log);
+            try { p.Dispose(); } catch { }
+            try { if (File.Exists(seg)) File.Delete(seg); } catch { }
+            return (_audioOpt.Any ? "o vídeo não iniciou junto com o áudio" : "o vídeo não iniciou (tempo esgotado)") +
+                   (string.IsNullOrWhiteSpace(t) ? "." : " (" + t + ").");
         }
         _startingUp = false;
 
         if (p.HasExited)
         {
-            _sw.Reset(); _proc = null;
-            try { _audio?.Dispose(); } catch { }
-            if (_audio != null) lock (_diag) foreach (var n in _audio.GetNotes()) _diag.AppendLine("  áudio: " + n);
+            _proc = null;
+            try { audio?.Dispose(); } catch { }
+            if (audio != null) lock (_diag) foreach (var n in audio.GetNotes()) _diag.AppendLine("  áudio: " + n);
             _audio = null;
             var tail = LastLines(log);
             Note("O FFmpeg encerrou logo após iniciar: " + tail);
@@ -228,6 +244,8 @@ public sealed class Recorder : IDisposable
             try { if (File.Exists(seg)) File.Delete(seg); } catch { }
             return string.IsNullOrWhiteSpace(tail) ? "o codificador encerrou imediatamente." : tail;
         }
+
+        _sw.Restart();            // a partir daqui o tempo gravado conta
         _segments.Add(seg);
         return null;
     }
@@ -269,18 +287,33 @@ public sealed class Recorder : IDisposable
     }
 
     // ---------------------------------------------------------------- pausa / retomada
-    public async Task PauseAsync()
+    private Task? _stopTask;
+
+    /// <summary>
+    /// Pausa na hora: o cronômetro congela e a interface muda imediatamente; a finalização do trecho
+    /// (encerrar o FFmpeg e fechar o MP4) acontece em segundo plano.
+    /// </summary>
+    public Task PauseAsync()
     {
-        if (State != RecState.Recording) return;
-        await StopSegmentAsync();
-        if (State == RecState.Recording) SetState(RecState.Paused);
+        if (State != RecState.Recording) return Task.CompletedTask;
+        var seg = _sw.Elapsed;
+        _accum += seg; _sw.Reset();
+        SetState(RecState.Paused);
+        _stopTask = StopSegmentAsync(seg);
+        return Task.CompletedTask;
     }
 
     public async Task<string?> ResumeAsync()
     {
         if (State != RecState.Paused) return null;
+        SetState(RecState.Starting);
+        try { if (_stopTask != null) await _stopTask; } catch { }   // normalmente já terminou
         var err = await LaunchSegmentAsync(_mode, _enc);
-        if (err != null) return "Não foi possível retomar a gravação: " + err;
+        if (err != null)
+        {
+            SetState(RecState.Paused);
+            return "Não foi possível retomar a gravação: " + err;
+        }
         SetState(RecState.Recording);
         return null;
     }
@@ -305,7 +338,10 @@ public sealed class Recorder : IDisposable
             return new RecordingResult { Ignored = true };
 
         SetState(RecState.Finalizing);
-        await StopSegmentAsync();
+        var seg = _sw.IsRunning ? _sw.Elapsed : TimeSpan.Zero;
+        if (_sw.IsRunning) { _accum += seg; _sw.Reset(); }
+        try { if (_stopTask != null) await _stopTask; } catch { }   // trecho de uma pausa ainda sendo finalizado
+        await StopSegmentAsync(seg);                                // sem efeito se estava pausado (sem processo)
         var result = await MergeAsync();
         if (interruptionReason != null)
             result.Message = interruptionReason + " " + result.Message;
@@ -316,7 +352,7 @@ public sealed class Recorder : IDisposable
         return result;
     }
 
-    private async Task StopSegmentAsync()
+    private async Task StopSegmentAsync(TimeSpan segmentElapsed)
     {
         var p = _proc;
         if (p == null) return;
@@ -328,8 +364,7 @@ public sealed class Recorder : IDisposable
                 // Com áudio, o stdin carrega o PCM: ao parar o mixer e fechar o pipe, o FFmpeg encerra
                 // (-shortest) e finaliza o MP4 normalmente.
                 var a = _audio; _audio = null;
-                var videoElapsed = _sw.Elapsed;
-                await Task.Run(() => a.Stop(videoElapsed));
+                await Task.Run(() => a.Stop(segmentElapsed));
                 try { p.StandardInput.Close(); } catch { }
                 lock (_diag) foreach (var n in a.GetNotes()) _diag.AppendLine("  áudio: " + n);
             }
@@ -356,7 +391,6 @@ public sealed class Recorder : IDisposable
         }
         finally
         {
-            if (_sw.IsRunning) { _accum += _sw.Elapsed; _sw.Reset(); }
             try { p.Dispose(); } catch { }
             _proc = null;
             _stoppingExpected = false;
