@@ -165,10 +165,13 @@
                             </StackPanel>
 
                             <Grid Margin="0,12,0,0">
-                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+                                <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                                 <Button x:Name="MicTestButton" Content="Testar microfone" Style="{StaticResource GhostBtn}"
-                                        Height="32" MinWidth="150" FontSize="13" Margin="0,0,12,0" Click="MicTestButton_Click"/>
-                                <ProgressBar Grid.Column="1" x:Name="MicMeter" Minimum="0" Maximum="1" Height="12" VerticalAlignment="Center"
+                                        Height="32" MinWidth="150" FontSize="13" Margin="0,0,10,0" Click="MicTestButton_Click"/>
+                                <Button Grid.Column="1" x:Name="MicRecordTestButton" Content="Gravar 5 s e ouvir" Style="{StaticResource GhostBtn}"
+                                        Height="32" MinWidth="150" FontSize="13" Margin="0,0,12,0" Click="MicRecordTestButton_Click"
+                                        ToolTip="Grava 5 segundos do microfone selecionado e toca de volta, para você ouvir exatamente o que o programa captura"/>
+                                <ProgressBar Grid.Column="2" x:Name="MicMeter" Minimum="0" Maximum="1" Height="12" VerticalAlignment="Center"
                                              Foreground="{StaticResource Green}" Background="{StaticResource Surface2}"
                                              BorderBrush="{StaticResource Border}"/>
                             </Grid>

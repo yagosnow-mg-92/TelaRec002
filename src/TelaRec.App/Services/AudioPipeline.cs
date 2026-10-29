@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.IO;
 using NAudio.CoreAudioApi;
@@ -132,6 +133,7 @@ internal sealed class CaptureSource : IDisposable
     public void Start() => _cap.StartRecording();
     public void Stop() { try { _cap.StopRecording(); } catch { } }
     public void Clear() => _ring.Clear();
+    public double BufferedSeconds => _ring.BufferedSeconds;
     public void Trim(double seconds) => _ring.TrimTo(seconds);
 
     /// <summary>Lê até <paramref name="count"/> amostras (estéreo 48 kHz); devolve quantas existiam.</summary>
@@ -152,25 +154,33 @@ internal sealed class CaptureSource : IDisposable
 
 /// <summary>
 /// Mixa som do computador + microfone em tempo real e entrega ao FFmpeg (stdin) como PCM s16le 48 kHz estéreo.
-/// O relógio é o do Windows: quando não há som (o loopback não envia nada em silêncio) o mixer injeta silêncio,
-/// mantendo o áudio sempre do mesmo comprimento do vídeo. Ao parar, completa com silêncio qualquer diferença,
-/// para que o "-shortest" do FFmpeg nunca corte o vídeo por causa de um áudio curto.
+/// O mixer NUNCA espera o FFmpeg: os blocos de 20 ms vão para uma fila e uma thread de escrita os entrega ao pipe
+/// conforme o FFmpeg consegue ler. Assim, se o FFmpeg demorar para ler (ex.: codificador de vídeo ocupado),
+/// nenhum áudio capturado é descartado. O relógio é o do Windows: quando não há som o mixer injeta silêncio, e ao
+/// parar completa com silêncio até o tamanho do vídeo para que o "-shortest" nunca corte o vídeo.
 /// </summary>
 internal sealed class AudioPipeline : IDisposable
 {
     private const int Frames = 960;            // 20 ms
     private const int Samples = Frames * 2;    // estéreo
     private const int PrimeBlocks = 2;         // 40 ms de silêncio (> 4096 bytes, o tamanho do 1º pacote do demuxer PCM)
+    private const int MaxQueueBlocks = 30000;  // 10 min de áudio: limite de segurança da fila
 
     private readonly AudioOptions _o;
     private CaptureSource? _sys, _mic;
     private MicProcessor? _micProc;
     private Stream? _out;
-    private Thread? _thread;
+    private Thread? _thread, _writer;
+    private BlockingCollection<byte[]>? _q;
     private volatile bool _stop;
-    private long _written;                      // blocos de 20 ms já enviados ao FFmpeg
+    private long _written;                      // blocos de 20 ms enfileirados (comprimento lógico do áudio)
     private readonly Stopwatch _t0 = Stopwatch.StartNew();
     private readonly List<string> _notes = new();
+
+    // estatísticas para o relatório técnico
+    private long _blocksMixed, _micStarved, _maxQueue;
+    private double _maxMicBufMs, _maxWriteMs;
+    private bool _queueFullNoted;
 
     public List<string> Warnings { get; } = new();
 
@@ -193,9 +203,10 @@ internal sealed class AudioPipeline : IDisposable
             {
                 using var en = new MMDeviceEnumerator();
                 var dev = o.MicDeviceId != null ? en.GetDevice(o.MicDeviceId) : en.GetDefaultAudioEndpoint(DataFlow.Capture, Role.Console);
-                _mic = new CaptureSource(new WasapiCapture(dev));
+                var cap = new WasapiCapture(dev);
+                _mic = new CaptureSource(cap);
                 _micProc = new MicProcessor(o.MicGain, o.Denoise, o.DenoiseLevel);
-                Note("Microfone: captura criada (" + dev.FriendlyName + ").");
+                Note($"Microfone: captura criada ({dev.FriendlyName}; formato {cap.WaveFormat.SampleRate} Hz, {cap.WaveFormat.Channels} canal(is), {cap.WaveFormat.BitsPerSample} bits).");
             }
             catch (Exception ex)
             {
@@ -212,6 +223,10 @@ internal sealed class AudioPipeline : IDisposable
     {
         _out = output;
         _videoStarted = videoStarted;
+        _q = new BlockingCollection<byte[]>(new ConcurrentQueue<byte[]>());
+        _writer = new Thread(WriterLoop) { IsBackground = true, Name = "TelaRec-audio-writer" };
+        _writer.Start();
+
         try { _sys?.Start(); if (_sys != null) Note("Som do computador: capturando."); }
         catch (Exception ex) { Warnings.Add("Aviso: falha ao iniciar a captura do som do computador (" + ex.Message + ")."); Note("Som do computador: falha ao iniciar - " + ex.Message); _sys?.Dispose(); _sys = null; }
         try { _mic?.Start(); if (_mic != null) Note("Microfone: capturando."); }
@@ -226,6 +241,49 @@ internal sealed class AudioPipeline : IDisposable
         _thread.Start();
     }
 
+    /// <summary>Entrega a fila ao FFmpeg. Só esta thread escreve no pipe (e só ela pode ficar bloqueada).</summary>
+    private void WriterLoop()
+    {
+        try
+        {
+            foreach (var b in _q!.GetConsumingEnumerable())
+            {
+                long t = Stopwatch.GetTimestamp();
+                _out!.Write(b, 0, b.Length);
+                double ms = (Stopwatch.GetTimestamp() - t) * 1000.0 / Stopwatch.Frequency;
+                if (ms > _maxWriteMs) _maxWriteMs = ms;
+            }
+        }
+        catch (Exception ex)
+        {
+            Note("Erro ao escrever no FFmpeg: " + ex.Message);
+            try { foreach (var _ in _q!.GetConsumingEnumerable()) { } } catch { }   // esvazia para não acumular memória
+        }
+    }
+
+    private void Enqueue(byte[] block)
+    {
+        var q = _q;
+        if (q == null || q.IsAddingCompleted) return;
+        if (q.Count >= MaxQueueBlocks)
+        {
+            if (!_queueFullNoted) { _queueFullNoted = true; Note("Fila de áudio cheia (FFmpeg muito lento): descartando áudio novo."); }
+            return;
+        }
+        try
+        {
+            q.Add(block);
+            Interlocked.Increment(ref _written);
+            if (q.Count > _maxQueue) _maxQueue = q.Count;
+        }
+        catch (InvalidOperationException) { /* fila já finalizada */ }
+    }
+
+    private void EnqueueSilence(int blocks)
+    {
+        for (int i = 0; i < blocks && !_stop; i++) Enqueue(new byte[Samples * 2]);
+    }
+
     private void Run()
     {
         var sysBuf = new float[Samples];
@@ -234,11 +292,11 @@ internal sealed class AudioPipeline : IDisposable
         var pcm = new byte[Samples * 2];
 
         // 1) "Escorva": alguns blocos de silêncio logo de início liberam a leitura do FFmpeg.
-        if (!WriteSilence(pcm, PrimeBlocks)) { Note("Erro ao escrever o silêncio inicial no FFmpeg."); return; }
-        Note("Silêncio inicial enviado.");
+        EnqueueSilence(PrimeBlocks);
+        Note("Silêncio inicial enfileirado.");
 
         // 2) Espera o 1º quadro de vídeo existir (no máximo 3 s). O áudio é PCM puro (sem relógio próprio),
-        //    então o que escrevermos a partir daqui cai no início da linha do tempo do vídeo.
+        //    então o que entregarmos a partir daqui cai no início da linha do tempo do vídeo.
         var wait = Stopwatch.StartNew();
         while (!_stop && !_videoStarted.Wait(10) && wait.ElapsedMilliseconds < 3000) { }
         if (_stop) { Note("Parado antes do 1º quadro de vídeo."); return; }
@@ -248,7 +306,7 @@ internal sealed class AudioPipeline : IDisposable
         // 3) Ajuste fino do usuário: positivo = áudio mais tarde (silêncio extra); negativo = áudio mais cedo.
         //    Os blocos iniciais de escorva são compensados descartando o mesmo tanto de áudio real.
         int adj = _o.SyncAdjustMs;
-        if (adj > 0 && !WriteSilence(pcm, adj / 20)) { Note("Erro ao escrever o ajuste de sincronia."); return; }
+        if (adj > 0) EnqueueSilence(adj / 20);
         long skip = PrimeBlocks + (adj < 0 ? (-adj) / 20 : 0);
 
         var clock = Stopwatch.StartNew();
@@ -267,15 +325,17 @@ internal sealed class AudioPipeline : IDisposable
                     if (n < Samples) Array.Clear(sysBuf, n, Samples - n);
                     AudioMath.ApplyGain(sysBuf, Samples, _o.SystemGain);
                     AudioMath.MixInto(mix, sysBuf, Samples);
-                    _sys.Trim(0.25);
+                    _sys.Trim(1.0);
                 }
                 if (_mic != null && _micProc != null)
                 {
+                    double bufMs = _mic.BufferedSeconds * 1000.0;
+                    if (bufMs > _maxMicBufMs) _maxMicBufMs = bufMs;
                     int n = _mic.Read(micBuf, Samples);
-                    if (n < Samples) Array.Clear(micBuf, n, Samples - n);
+                    if (n < Samples) { Array.Clear(micBuf, n, Samples - n); _micStarved++; }
                     _micProc.Process(micBuf, Samples);
                     AudioMath.MixInto(mix, micBuf, Samples);
-                    _mic.Trim(0.25);
+                    _mic.Trim(1.0);
                 }
             }
             catch (Exception ex)
@@ -288,65 +348,56 @@ internal sealed class AudioPipeline : IDisposable
             if (blocks >= skip)
             {
                 AudioMath.ToPcm16(mix, Samples, pcm);
-                try { _out!.Write(pcm, 0, pcm.Length); _out.Flush(); Interlocked.Increment(ref _written); }
-                catch (Exception ex) { Note("Erro ao escrever no FFmpeg: " + ex.Message); break; } // FFmpeg encerrou
+                var copy = new byte[pcm.Length];
+                Buffer.BlockCopy(pcm, 0, copy, 0, pcm.Length);
+                Enqueue(copy);
             }
             blocks++;
+            _blocksMixed = blocks;
         }
         Note($"Mixer encerrado ({blocks} blocos, {errors} erro(s)).");
     }
 
-    private bool WriteSilence(byte[] pcm, int blocks)
-    {
-        Array.Clear(pcm, 0, pcm.Length);
-        try
-        {
-            for (int i = 0; i < blocks && !_stop; i++) { _out!.Write(pcm, 0, pcm.Length); Interlocked.Increment(ref _written); }
-            _out!.Flush();
-            return true;
-        }
-        catch { return false; }
-    }
-
     /// <summary>
     /// Para o mixer e as capturas. Se <paramref name="videoElapsed"/> for informado, completa o áudio com silêncio até
-    /// cobrir o tempo de vídeo (evita que o -shortest corte o vídeo). O chamador fecha o stdin do FFmpeg em seguida.
+    /// cobrir o tempo de vídeo (evita que o -shortest corte o vídeo) e espera a fila ser entregue ao FFmpeg.
+    /// O chamador fecha o stdin do FFmpeg em seguida.
     /// </summary>
     public void Stop(TimeSpan? videoElapsed = null)
     {
         _stop = true;
-        try
-        {
-            if (_thread != null && !_thread.Join(500))
-            {
-                // O mixer pode estar preso numa escrita (FFmpeg não está lendo): fechar o pipe a destrava.
-                Note("Mixer não parou em 500 ms; fechando o pipe para destravá-lo.");
-                try { _out?.Close(); } catch { }
-                _thread.Join(2000);
-            }
-        }
-        catch { }
+        try { _thread?.Join(2000); } catch { }
 
         _sys?.Stop(); _mic?.Stop();
         _sys?.Dispose(); _mic?.Dispose();
         _sys = null; _mic = null;
 
-        if (videoElapsed is TimeSpan ve && _out != null)
+        if (videoElapsed is TimeSpan ve && _q != null)
         {
-            try
+            long target = (long)(ve.TotalMilliseconds / 20) + 25;          // + 0,5 s de folga
+            long missing = Math.Min(target - Interlocked.Read(ref _written), 30000);
+            if (missing > 0)
             {
-                long target = (long)(ve.TotalMilliseconds / 20) + 25;          // + 0,5 s de folga
-                long missing = Math.Min(target - Interlocked.Read(ref _written), 30000);
-                if (missing > 0)
-                {
-                    var pcm = new byte[Samples * 2];
-                    for (long i = 0; i < missing; i++) { _out.Write(pcm, 0, pcm.Length); Interlocked.Increment(ref _written); }
-                    _out.Flush();
-                    Note($"Áudio completado com {missing} bloco(s) de silêncio para cobrir o vídeo.");
-                }
+                for (long i = 0; i < missing; i++) Enqueue(new byte[Samples * 2]);
+                Note($"Áudio completado com {missing} bloco(s) de silêncio para cobrir o vídeo.");
             }
-            catch (Exception ex) { Note("Não foi possível completar o áudio com silêncio: " + ex.Message); }
         }
+
+        // Entrega o que ficou na fila (o FFmpeg pode estar atrasado); se travar, fecha o pipe para destravar.
+        try
+        {
+            _q?.CompleteAdding();
+            if (_writer != null && !_writer.Join(20000))
+            {
+                Note("A fila de áudio não foi entregue em 20 s; fechando o pipe.");
+                try { _out?.Close(); } catch { }
+                _writer.Join(2000);
+            }
+        }
+        catch { }
+
+        Note($"Resumo: {_blocksMixed} blocos mixados; microfone com buffer vazio em {_micStarved} bloco(s); " +
+             $"maior buffer do microfone {_maxMicBufMs:0} ms; maior bloqueio de escrita no FFmpeg {_maxWriteMs:0} ms; fila máxima {_maxQueue} bloco(s).");
     }
 
     public void Dispose() => Stop();

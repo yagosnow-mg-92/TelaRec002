@@ -39,6 +39,10 @@ As duas fontes são mixadas em uma só faixa AAC (160 kbps, 48 kHz estéreo). Co
 
 **Sincronia:** o áudio chega ao FFmpeg por um pipe, que não carrega relógio próprio. Por isso o programa (1) reduz a análise inicial da entrada de áudio (sem isso o FFmpeg demorava ~1 s para iniciar o vídeo e o som saía atrasado) e (2) só começa a enviar o áudio real quando o **primeiro quadro de vídeo** aparece (detectado pelo filtro `showinfo`). Assim o som já nasce alinhado com a imagem, sem depender de uma estimativa. Há ainda um **Ajuste fino da sincronia (ms)** (padrão 0; positivo atrasa o som, negativo adianta) para eventuais diferenças do seu equipamento. A sincronia em hardware real ainda precisa ser confirmada.
 
+**Teste "Gravar 5 s e ouvir":** grava 5 segundos do microfone selecionado (sem passar pelo FFmpeg), analisa se o áudio chega contínuo ou picado e toca de volta. Se chegar picado, o problema está no microfone/driver (efeitos de supressão de ruído do próprio driver costumam cortar a voz) e não no programa.
+
+**Áudio sem perdas:** o mixer entrega o áudio ao FFmpeg por uma fila em memória (thread própria de escrita). Se o FFmpeg demorar para ler (por exemplo, com o codificador de vídeo ocupado), nada é descartado; ao finalizar, o programa espera a fila ser entregue. O relatório técnico traz um resumo (buffer máximo do microfone, maior bloqueio de escrita, etc.).
+
 **Se o áudio der problema:** o programa confere, ao iniciar, se o vídeo realmente começou junto com o áudio. Se não começar, tenta outras combinações e, como última opção, grava **sem áudio** (com um aviso) em vez de perder o vídeo. Ao terminar, o áudio é sempre completado com silêncio até o tamanho do vídeo, para que um problema de áudio nunca corte o vídeo. Em qualquer falha aparece o botão **Abrir relatório**, que abre `%LOCALAPPDATA%\TelaRec\logs\ultima-gravacao.log` (comando do FFmpeg, linha do tempo do áudio e mensagens do FFmpeg) — envie esse arquivo ao suporte.
 
 **Permissão do microfone:** se a barra de teste não mexer, confira *Configurações do Windows → Privacidade e segurança → Microfone* e permita que **aplicativos de desktop** usem o microfone.

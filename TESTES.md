@@ -66,3 +66,6 @@ Marque conforme for validando. Para cada item anote Windows, GPU e resultado.
 | 56 | Clicar em "Iniciar gravação": o botão muda na hora para "Iniciando…" e o cronômetro começa em 00:00:00 e conta sem "pular" | ☐ |
 | 57 | Pausar: cronômetro congela e a tela muda na hora; Retomar: mostra "Retomando…" e volta a contar a partir do valor anterior | ☐ |
 | 58 | Pausar e retomar várias vezes rápido, e finalizar logo depois de pausar: o vídeo final tem todos os trechos e abre normalmente | ☐ |
+| 59 | Microfone "Gravar 5 s e ouvir": falar uma frase; o resultado mostra sinal contínuo e a reprodução soa inteira; repetir com cada microfone da lista | ☐ |
+| 60 | Gravar com microfone (e com som do PC) falando frases longas: o áudio do MP4 sai inteiro, sem cortes | ☐ |
+| 61 | Em caso de áudio picado, "Abrir relatório" mostra o resumo do áudio (buffer do microfone, bloqueio de escrita) | ☐ |

@@ -603,6 +603,82 @@ public partial class MainWindow : Window
         MicTestButton.Content = "Testar microfone";
     }
 
+    /// <summary>Grava 5 s do microfone (sem passar pelo FFmpeg), analisa a continuidade e toca de volta.</summary>
+    private async void MicRecordTestButton_Click(object sender, RoutedEventArgs e)
+    {
+        var mic = SelectedMic;
+        if (mic == null) { MicTestHint.Text = "Selecione um microfone na lista."; return; }
+        StopMicTest();
+        MicRecordTestButton.IsEnabled = false; MicTestButton.IsEnabled = false;
+        try
+        {
+            MicTestHint.Text = "Gravando 5 segundos… FALE uma frase normalmente.";
+            var all = new List<float>(48000 * 2 * 6);
+            using (var en = new MMDeviceEnumerator())
+            {
+                var cap = new WasapiCapture(en.GetDevice(mic.Id));
+                using var src = new CaptureSource(cap);
+                src.Start();
+                var proc = NewMicProcessor();
+                var buf = new float[9600];
+                var sw = Stopwatch.StartNew();
+                double level = 0;
+                while (sw.ElapsedMilliseconds < 5000)
+                {
+                    await Task.Delay(40);
+                    int n = src.Read(buf, buf.Length) & ~1;
+                    if (n <= 0) continue;
+                    proc.Process(buf, n);
+                    for (int i = 0; i < n; i++) all.Add(buf[i]);
+                    level = Math.Max(Math.Sqrt(Math.Min(1f, AudioMath.Peak(buf, n))), level * 0.8);
+                    MicMeter.Value = Math.Min(1.0, level);
+                }
+                src.Stop();
+            }
+            MicMeter.Value = 0;
+
+            // Análise: em janelas de 5 ms, quanto do tempo tem sinal e qual o maior trecho contínuo.
+            var data = all.ToArray();
+            int win = 480 * 2;                       // 5 ms estéreo
+            int windows = Math.Max(1, data.Length / win);
+            int withSignal = 0, run = 0, longest = 0, runs = 0; bool inRun = false;
+            for (int w = 0; w < windows; w++)
+            {
+                bool sig = false;
+                for (int i = w * win; i < (w + 1) * win && i < data.Length; i++) if (Math.Abs(data[i]) > 1e-5f) { sig = true; break; }
+                if (sig) { withSignal++; run++; if (!inRun) { runs++; inRun = true; } longest = Math.Max(longest, run); }
+                else { run = 0; inRun = false; }
+            }
+            double pct = 100.0 * withSignal / windows;
+            double peak = data.Length > 0 ? AudioMath.Peak(data, data.Length) : 0;
+            string verdict = peak < 0.0005
+                ? "Nenhum som foi captado. Confira o microfone selecionado e a permissão de microfone do Windows."
+                : (longest * 5 < 600 && runs > 3)
+                    ? "ATENÇÃO: o áudio chegou PICADO (só rajadas curtas). Isso indica problema no microfone/driver, não no programa. " +
+                      "Tente outro microfone da lista e, no Windows (Painel de Som → Gravação → Microfone → Propriedades → Aprimoramentos/Recursos), " +
+                      "desative supressão de ruído e efeitos de áudio do driver."
+                    : "O áudio chegou contínuo: o microfone está entregando bem ao programa.";
+            MicTestHint.Text = $"Resultado: sinal em {pct:0}% do tempo, {runs} trecho(s), maior trecho contínuo {longest * 5} ms, pico {20 * Math.Log10(Math.Max(peak, 1e-6)):0} dBFS. {verdict}";
+
+            if (peak >= 0.0005)
+            {
+                var pcm = new byte[data.Length * 2];
+                AudioMath.ToPcm16(data, data.Length, pcm);
+                using var wo = new WaveOutEvent();
+                var done = new TaskCompletionSource();
+                wo.PlaybackStopped += (_, _) => done.TrySetResult();
+                wo.Init(new RawSourceWaveStream(new MemoryStream(pcm), new WaveFormat(48000, 16, 2)));
+                wo.Play();
+                await done.Task;
+            }
+        }
+        catch (Exception ex)
+        {
+            MicTestHint.Text = "Não foi possível fazer o teste: " + ex.Message + " Verifique Configurações do Windows → Privacidade → Microfone.";
+        }
+        finally { MicRecordTestButton.IsEnabled = true; MicTestButton.IsEnabled = true; MicMeter.Value = 0; }
+    }
+
     private void MeterTick(object? sender, EventArgs e)
     {
         if (_testSrc == null || _testProc == null) return;
