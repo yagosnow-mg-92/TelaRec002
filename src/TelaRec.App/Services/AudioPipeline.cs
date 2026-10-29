@@ -16,6 +16,12 @@ internal sealed class RingSampleProvider : ISampleProvider
     private readonly object _lock = new();
     public WaveFormat WaveFormat { get; }
 
+    /// <summary>Quanto áudio (em segundos) está guardado na fila neste momento.</summary>
+    public double BufferedSeconds
+    {
+        get { lock (_lock) return (double)_count / (WaveFormat.SampleRate * WaveFormat.Channels); }
+    }
+
     public RingSampleProvider(WaveFormat fmt, int seconds)
     {
         WaveFormat = fmt;
