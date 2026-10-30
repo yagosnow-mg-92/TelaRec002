@@ -92,6 +92,21 @@ public class HelpersTests : IDisposable
     public void Sanitize_RemovesInvalidChars(string? input, string expected) =>
         Assert.Equal(expected, FileNamer.Sanitize(input));
 
+    [Theory]
+    [InlineData("Teste do login", "Teste do login")]
+    [InlineData("  bug 123.MP4 ", "bug 123")]
+    [InlineData("a/b\\c:d*e?f\"g<h>i|j", "abcdefghij")]
+    [InlineData("CON", "CON_")]
+    [InlineData("nul", "nul_")]
+    [InlineData("", "")]
+    [InlineData("...", "")]
+    public void SafeName_Works(string input, string expected) =>
+        Assert.Equal(expected, FileNamer.SafeName(input));
+
+    [Fact]
+    public void SafeName_LimitsLength() =>
+        Assert.True(FileNamer.SafeName(new string('a', 400)).Length <= 150);
+
     [Fact]
     public void TimeFormat_HandlesLongRecordings() =>
         Assert.Equal("100:00:05", TimeFormat.Format(TimeSpan.FromSeconds(360005)));

@@ -69,3 +69,8 @@ Marque conforme for validando. Para cada item anote Windows, GPU e resultado.
 | 59 | Microfone "Gravar 5 s e ouvir": falar uma frase; o resultado mostra sinal contínuo e a reprodução soa inteira; repetir com cada microfone da lista | ☐ |
 | 60 | Gravar com microfone (e com som do PC) falando frases longas: o áudio do MP4 sai inteiro, sem cortes | ☐ |
 | 61 | Em caso de áudio picado, "Abrir relatório" mostra o resumo do áudio (buffer do microfone, bloqueio de escrita) | ☐ |
+| 62 | Finalizar: aparece a janela de nome com o padrão preenchido e ".mp4" fixo; só OK mantém o nome padrão | ☐ |
+| 63 | Alterar o nome e clicar OK: o arquivo é renomeado, a mensagem e os botões (Abrir pasta/Reproduzir) usam o novo nome | ☐ |
+| 64 | Digitar caracteres inválidos (\ / : * ? " < > \|), nome vazio, "CON", nome com ".mp4": tratados sem erro | ☐ |
+| 65 | Escolher um nome que já existe na pasta: não sobrescreve, acrescenta (2) e avisa | ☐ |
+| 66 | Depois da janela de nome, a pergunta do Drive aparece e o arquivo enviado tem o nome final | ☐ |

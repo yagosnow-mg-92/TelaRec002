@@ -783,7 +783,7 @@ public partial class MainWindow : Window
         LogButton.Visibility = showLog ? Visibility.Visible : Visibility.Collapsed;
         PlayButton.Visibility = _lastFile != null ? Visibility.Visible : Visibility.Collapsed;
         DriveButton.Visibility = (_lastFile != null && DriveConfigured()) ? Visibility.Visible : Visibility.Collapsed;
-        if (r.Success && r.FilePath != null) _ = OfferDriveAsync(r.FilePath);
+        if (r.Success && r.FilePath != null) _ = AfterRecordingAsync(r.FilePath);
     }
 
     private void OpenFolderButton_Click(object sender, RoutedEventArgs e)

@@ -13,6 +13,22 @@ public static class FileNamer
         return s.Trim().TrimEnd('.');
     }
 
+    private static readonly HashSet<string> Reserved = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    };
+
+    /// <summary>Nome de arquivo (sem extensão) seguro para o Windows: sem caracteres inválidos, sem ".mp4", sem nomes reservados.</summary>
+    public static string SafeName(string? name, int maxLength = 150)
+    {
+        var s = Sanitize(name);
+        if (s.Length > maxLength) s = s[..maxLength].Trim().TrimEnd('.');
+        if (Reserved.Contains(s)) s += "_";
+        return s;
+    }
+
     public static string DefaultName(DateTime now) => $"TelaRec_{now:yyyy-MM-dd_HH-mm-ss}";
 
     /// <summary>Nunca devolve um caminho de arquivo já existente (não sobrescreve gravações).</summary>
