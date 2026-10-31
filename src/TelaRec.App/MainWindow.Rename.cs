@@ -9,8 +9,26 @@ public partial class MainWindow
 {
     private async Task AfterRecordingAsync(string path)
     {
+        // 1) Drive: pergunta (ou envia direto, no modo automático) e escolhe a pasta, ANTES do nome do arquivo.
+        DriveTarget? target = null;
+        bool sendToDrive = false;
+        if (DriveConfigured() && File.Exists(path))
+        {
+            bool auto = DriveAutoCheck.IsChecked == true;
+            sendToDrive = auto || AskSendToDrive(path);
+            // Modo automático: vai direto para a pasta raiz configurada, sem abrir o navegador de pastas.
+            if (sendToDrive && !auto)
+            {
+                target = ChooseDriveFolder();
+                sendToDrive = target != null;      // cancelou a escolha: salva só no computador
+            }
+        }
+
+        // 2) Nome do arquivo.
         var finalPath = AskFileName(path);
-        await OfferDriveAsync(finalPath);
+
+        // 3) Envio.
+        if (sendToDrive) await UploadToDriveAsync(finalPath, target?.FolderId, target?.PathText);
     }
 
     /// <summary>Mostra a janela de nome do arquivo e renomeia o vídeo. Devolve o caminho final.</summary>

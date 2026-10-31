@@ -21,6 +21,9 @@ internal sealed class UploadResult
 }
 
 internal sealed record DriveCheckResult(bool Ok, string Message);
+internal sealed record DriveFolder(string Id, string Name);
+internal sealed record DriveListing(bool Ok, string? Error, string Name, List<DriveFolder> Folders);
+internal sealed record DriveCreateResult(bool Ok, string? Error, DriveFolder? Folder, bool Existed);
 
 internal sealed class DriveException : Exception
 {
@@ -98,6 +101,8 @@ internal static class DriveUploader
                     err += "\n\nO script publicado ainda não tem a sua chave. Confira no editor a linha \"const CHAVE\", salve (Ctrl+S) e crie uma NOVA VERSÃO da implantação (Implantar > Gerenciar implantações > lápis > Versão: Nova versão > Implantar).";
                 else if (err.Contains("Chave inválida"))
                     err += "\n\nA chave do TelaRec é diferente da chave do script. Clique em \"Gerar nova chave\", copie o código de novo, cole no script.new, salve e crie uma NOVA VERSÃO da implantação.";
+                else if (err.Contains("não é permitida pelo script"))
+                    err += "\n\nA pasta configurada no TelaRec não é a que está liberada no script. Clique em \"Copiar código do script\" (ele já inclui a pasta atual), cole no script.new e crie uma NOVA VERSÃO da implantação.";
                 else if (err.Contains("Pasta não encontrada"))
                     err += "\n\nConfira o link da pasta e se a conta que criou o script tem acesso a ela (abra a pasta no Drive com essa conta).";
                 return new DriveCheckResult(false, err);
@@ -120,7 +125,7 @@ internal static class DriveUploader
     }
 
     public static async Task<UploadResult> UploadAsync(string scriptUrl, string key, string folderId, string path,
-        IProgress<UploadProgress> progress, CancellationToken ct, string mime = "video/mp4")
+        IProgress<UploadProgress> progress, CancellationToken ct, string mime = "video/mp4", string? rootId = null)
     {
         string? session = null;
         try
@@ -130,7 +135,7 @@ internal static class DriveUploader
             long total = fi.Length;
             if (total == 0) return new UploadResult { Error = "O arquivo de vídeo está vazio." };
 
-            var start = await CallScriptAsync(scriptUrl, new { key, action = "start", folderId, name = fi.Name, size = total, mime }, ct);
+            var start = await CallScriptAsync(scriptUrl, new { key, action = "start", folderId, rootId = rootId ?? folderId, name = fi.Name, size = total, mime }, ct);
             if (!IsOk(start)) return new UploadResult { Error = Str(start, "error") ?? "O script recusou o envio." };
             session = Str(start, "sessionUri");
             if (string.IsNullOrEmpty(session)) return new UploadResult { Error = "O script não devolveu o endereço de envio." };
@@ -213,6 +218,51 @@ internal static class DriveUploader
         catch (DriveException ex) { return new UploadResult { Error = ex.Message }; }
         catch (HttpRequestException ex) { return new UploadResult { Error = "Sem conexão com a internet ou com o Google: " + ex.Message }; }
         catch (Exception ex) { return new UploadResult { Error = ex.Message }; }
+    }
+
+    private static string FriendlyScriptError(string? err)
+    {
+        err ??= "O script recusou o pedido.";
+        if (err.Contains("não é permitida pelo script"))
+            err += " Clique em \"Copiar código do script\" (ele já inclui a pasta atual), cole no script.new e crie uma Nova versão.";
+        else if (err.Contains("Ação desconhecida"))
+            err += " O script publicado é antigo: copie o código novo, cole no script.new e crie uma Nova versão.";
+        return err;
+    }
+
+    /// <summary>Lista as subpastas de <paramref name="folderId"/> (que precisa estar dentro de <paramref name="rootId"/>).</summary>
+    public static async Task<DriveListing> ListAsync(string url, string key, string rootId, string folderId, CancellationToken ct)
+    {
+        try
+        {
+            var r = await CallScriptAsync(url, new { key, action = "list", folderId, rootId }, ct);
+            if (!IsOk(r)) return new DriveListing(false, FriendlyScriptError(Str(r, "error")), "", new());
+            var list = new List<DriveFolder>();
+            if (r.TryGetProperty("folders", out var arr) && arr.ValueKind == JsonValueKind.Array)
+                foreach (var f in arr.EnumerateArray())
+                    list.Add(new DriveFolder(Str(f, "id") ?? "", Str(f, "name") ?? ""));
+            return new DriveListing(true, null, Str(r, "name") ?? "", list);
+        }
+        catch (DriveException ex) { return new DriveListing(false, ex.Message, "", new()); }
+        catch (HttpRequestException ex) { return new DriveListing(false, "Sem conexão com o Google: " + ex.Message, "", new()); }
+        catch (TaskCanceledException) { return new DriveListing(false, "O Google demorou demais para responder.", "", new()); }
+        catch (Exception ex) { return new DriveListing(false, ex.Message, "", new()); }
+    }
+
+    /// <summary>Cria uma subpasta em <paramref name="parentId"/> (ou devolve a que já existe com esse nome).</summary>
+    public static async Task<DriveCreateResult> CreateFolderAsync(string url, string key, string rootId, string parentId, string name, CancellationToken ct)
+    {
+        try
+        {
+            var r = await CallScriptAsync(url, new { key, action = "mkdir", folderId = parentId, rootId, name }, ct);
+            if (!IsOk(r)) return new DriveCreateResult(false, FriendlyScriptError(Str(r, "error")), null, false);
+            bool existed = r.TryGetProperty("existed", out var ex) && ex.ValueKind == JsonValueKind.True;
+            return new DriveCreateResult(true, null, new DriveFolder(Str(r, "id") ?? "", Str(r, "name") ?? name), existed);
+        }
+        catch (DriveException ex) { return new DriveCreateResult(false, ex.Message, null, false); }
+        catch (HttpRequestException ex) { return new DriveCreateResult(false, "Sem conexão com o Google: " + ex.Message, null, false); }
+        catch (TaskCanceledException) { return new DriveCreateResult(false, "O Google demorou demais para responder.", null, false); }
+        catch (Exception ex) { return new DriveCreateResult(false, ex.Message, null, false); }
     }
 
     /// <summary>Teste completo: confere a conexão, envia um .txt pequeno à pasta e o remove em seguida.</summary>

@@ -74,3 +74,12 @@ Marque conforme for validando. Para cada item anote Windows, GPU e resultado.
 | 64 | Digitar caracteres inválidos (\ / : * ? " < > \|), nome vazio, "CON", nome com ".mp4": tratados sem erro | ☐ |
 | 65 | Escolher um nome que já existe na pasta: não sobrescreve, acrescenta (2) e avisa | ☐ |
 | 66 | Depois da janela de nome, a pergunta do Drive aparece e o arquivo enviado tem o nome final | ☐ |
+| 67 | Atualizar o script para a v5 (colar o código novo e criar Nova versão): "Testar conexão" mostra "script v5" | ☐ |
+| 68 | Gravar → Sim ao Drive → o navegador de pastas abre na raiz e lista as subpastas em ordem alfabética | ☐ |
+| 69 | Abrir subpastas com duplo clique, Voltar até a raiz: na raiz o botão Voltar fica desativado | ☐ |
+| 70 | Nova pasta "505": é criada, o programa entra nela, "Salvar aqui" + nome do arquivo + envio: o vídeo cai em RAIZ/505 | ☐ |
+| 71 | Criar uma pasta com nome que já existe: entra na existente, sem duplicar | ☐ |
+| 72 | Cancelar envio na escolha de pasta: vídeo salvo só no computador, e a janela de nome ainda aparece | ☐ |
+| 73 | Modo "enviar automaticamente": vai para a raiz sem abrir o navegador de pastas | ☐ |
+| 74 | Trocar a pasta nas configurações sem recopiar o script: erro claro "não é permitida pelo script" com instrução | ☐ |
+| 75 | Botão "Enviar ao Drive" (depois da gravação) também abre o navegador de pastas | ☐ |

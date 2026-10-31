@@ -297,6 +297,27 @@ public class DriveTests
     }
 
     [Fact]
+    public void WithKey_EmbedsAllowedRoot_WithoutChangingLineCount()
+    {
+        var code = DriveBridgeScript.WithKey("k", "1AbCdEfGhIjKlMnOp");
+        Assert.Contains("const PASTAS_PERMITIDAS = ['1AbCdEfGhIjKlMnOp'];", code);
+        Assert.DoesNotContain(DriveBridgeScript.AllowedFoldersLine, code);
+        Assert.Equal(DriveBridgeScript.Code.Split('\n').Length, code.Split('\n').Length);   // a linha da chave não muda de lugar
+        Assert.Contains(DriveBridgeScript.AllowedFoldersLine, DriveBridgeScript.WithKey("k")); // sem raiz: mantém o original
+    }
+
+    [Fact]
+    public void Script_HasFolderBrowsingAndConfinement()
+    {
+        var c = DriveBridgeScript.Code;
+        Assert.Contains("req.action === 'list'", c);
+        Assert.Contains("req.action === 'mkdir'", c);
+        Assert.Contains("function dentroDaRaiz_", c);
+        Assert.Contains("PASTAS_PERMITIDAS.indexOf(raizId) < 0", c);   // a raiz pode ser travada no próprio Google
+        Assert.Contains("dentroDaRaiz_(pastaId, raizId)", c);          // tudo precisa estar dentro da raiz
+    }
+
+    [Fact]
     public void KeyLine_PointsToConstChaveLine()
     {
         var line = DriveBridgeScript.KeyLine;

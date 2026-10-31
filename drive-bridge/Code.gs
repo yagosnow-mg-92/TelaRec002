@@ -1,5 +1,5 @@
 /**
- * TelaRec - Ponte de envio ao Google Drive (Google Apps Script)  -  versão 4
+ * TelaRec - Ponte de envio ao Google Drive (Google Apps Script)  -  versão 5
  *
  * O QUE É A "CHAVE"?  É uma SENHA que o TelaRec gera para você. Ela NÃO vem do Google e NÃO é o ID da implantação.
  * A mesma senha fica em dois lugares: aqui no script (linha "const CHAVE") e no campo "Chave secreta" do TelaRec.
@@ -8,8 +8,7 @@
  * PASSO A PASSO (uma vez só) - o botão "?" do TelaRec mostra tudo isto com botões de ação:
  *  1. Neste editor: Ctrl+A, Delete, Ctrl+V (cola este código inteiro) e Ctrl+S (salvar).
  *  2. No menu no topo do editor, escolha a função "autorizar", clique em Executar e aceite as permissões
- *     (Avançado > Acessar projeto > Permitir). Se já tinha feito antes, FAÇA DE NOVO: esta versão pede
- *     também a permissão de criar arquivos no Drive.
+ *     (Avançado > Acessar projeto > Permitir).
  *  3. Implantar > Nova implantação > tipo "App da Web":
  *       Executar como: Eu     |     Quem pode acessar: Qualquer pessoa
  *     Clique em Implantar e copie o "URL do app da Web".
@@ -21,14 +20,15 @@
  * A ÚNICA LINHA QUE PODE PRECISAR DE ALTERAÇÃO é a que começa com "const CHAVE" (use Ctrl+F e procure por CHAVE).
  *   Altere SOMENTE o texto entre as aspas dessa linha. Nenhuma outra linha deve ser editada.
  *
- * SEGURANÇA: quem tiver o URL + a CHAVE consegue ENVIAR arquivos para a pasta e apagar apenas os arquivos de
- * TESTE do TelaRec (nome começando com "TelaRec-teste-"). Não consegue ler nem apagar mais nada.
+ * SEGURANÇA: quem tiver o URL + a CHAVE consegue, SOMENTE dentro da pasta configurada no TelaRec (e suas subpastas):
+ * enviar arquivos, ver os NOMES das subpastas e criar pastas. Pode apagar apenas arquivos de TESTE do TelaRec
+ * (nome começando com "TelaRec-teste-"). Não consegue ler arquivos nem apagar mais nada.
  */
-const VERSAO = 4; // usada pelo TelaRec para saber se a publicação está atualizada (não altere)
+const VERSAO = 5; // usada pelo TelaRec para saber se a publicação está atualizada (não altere)
 
 const CHAVE = 'TROQUE-POR-UMA-CHAVE-LONGA';
 
-// Opcional: limite as pastas aceitas. Ex.: ['1AbC...IdDaPasta']. Vazio = qualquer pasta que você possa editar.
+// Opcional: limite as pastas aceitas como PASTA RAIZ. Ex.: ['1AbC...IdDaPasta']. Vazio = qualquer pasta que você possa editar.
 const PASTAS_PERMITIDAS = [];
 
 const ESCOPO_DRIVE = 'https://www.googleapis.com/auth/drive';
@@ -54,13 +54,20 @@ function doPost(e) {
     }
 
     if (!req.folderId) return resposta_({ ok: false, error: 'Pasta não informada.' });
-    if (PASTAS_PERMITIDAS.length && PASTAS_PERMITIDAS.indexOf(req.folderId) < 0) {
+    const pastaId = String(req.folderId);
+    const raizId = String(req.rootId || req.folderId);   // pasta configurada no TelaRec
+
+    if (PASTAS_PERMITIDAS.length && PASTAS_PERMITIDAS.indexOf(raizId) < 0) {
       return resposta_({ ok: false, error: 'Esta pasta não é permitida pelo script.' });
+    }
+    // Tudo o que o TelaRec faz precisa acontecer DENTRO da pasta raiz configurada (nunca acima dela).
+    if (!dentroDaRaiz_(pastaId, raizId)) {
+      return resposta_({ ok: false, error: 'A pasta escolhida não está dentro da pasta configurada no TelaRec.' });
     }
 
     if (req.action === 'check') {
       let pasta;
-      try { pasta = DriveApp.getFolderById(req.folderId); }
+      try { pasta = DriveApp.getFolderById(pastaId); }
       catch (err) { return resposta_({ ok: false, error: 'Pasta não encontrada ou sem permissão para a conta dona do script.' }); }
       const esc = escopos_();
       return resposta_({
@@ -70,6 +77,40 @@ function doPost(e) {
         owner: Session.getEffectiveUser().getEmail(),
         podeEscrever: esc.length ? esc.indexOf(ESCOPO_DRIVE) >= 0 : null
       });
+    }
+
+    // Lista as subpastas (somente nomes e ids) de uma pasta.
+    if (req.action === 'list') {
+      let pasta;
+      try { pasta = DriveApp.getFolderById(pastaId); }
+      catch (err) { return resposta_({ ok: false, error: 'Pasta não encontrada ou sem permissão para a conta dona do script.' }); }
+      const it = pasta.getFolders();
+      const lista = [];
+      while (it.hasNext() && lista.length < 1000) {
+        const f = it.next();
+        lista.push({ id: f.getId(), name: f.getName() });
+      }
+      lista.sort(function (a, b) {
+        const x = a.name.toLowerCase(), y = b.name.toLowerCase();
+        return x < y ? -1 : (x > y ? 1 : 0);
+      });
+      return resposta_({ ok: true, name: pasta.getName(), folders: lista, truncated: lista.length >= 1000 });
+    }
+
+    // Cria uma subpasta (ou devolve a que já existe com o mesmo nome).
+    if (req.action === 'mkdir') {
+      const nome = String(req.name || '').replace(/[\\/:*?"<>|]/g, '_').trim().slice(0, 100);
+      if (!nome) return resposta_({ ok: false, error: 'Nome da pasta inválido.' });
+      let pai;
+      try { pai = DriveApp.getFolderById(pastaId); }
+      catch (err) { return resposta_({ ok: false, error: 'Pasta não encontrada ou sem permissão para a conta dona do script.' }); }
+      const existentes = pai.getFoldersByName(nome);
+      if (existentes.hasNext()) {
+        const f = existentes.next();
+        return resposta_({ ok: true, id: f.getId(), name: f.getName(), existed: true });
+      }
+      const nova = pai.createFolder(nome);
+      return resposta_({ ok: true, id: nova.getId(), name: nova.getName(), existed: false });
     }
 
     if (req.action === 'start') {
@@ -87,7 +128,7 @@ function doPost(e) {
           'X-Upload-Content-Type': mime,
           'X-Upload-Content-Length': String(tamanho)
         },
-        payload: JSON.stringify({ name: nome, parents: [req.folderId], mimeType: mime }),
+        payload: JSON.stringify({ name: nome, parents: [pastaId], mimeType: mime }),
         muteHttpExceptions: true
       });
       if (r.getResponseCode() !== 200) {
@@ -118,6 +159,20 @@ function resposta_(obj) {
 // Verdadeiro quando a CHAVE já não é o texto-modelo.
 function chaveTrocada_() {
   return CHAVE.indexOf('TROQUE-POR') !== 0;
+}
+
+// Verdadeiro se a pasta é a própria raiz ou está dentro dela (sobe pelos pais, no máximo 30 níveis).
+function dentroDaRaiz_(pastaId, raizId) {
+  if (pastaId === raizId) return true;
+  let atual;
+  try { atual = DriveApp.getFolderById(pastaId); } catch (err) { return false; }
+  for (let i = 0; i < 30; i++) {
+    const pais = atual.getParents();
+    if (!pais.hasNext()) return false;
+    atual = pais.next();
+    if (atual.getId() === raizId) return true;
+  }
+  return false;
 }
 
 // Lista as permissões (escopos) que este script realmente possui neste momento.

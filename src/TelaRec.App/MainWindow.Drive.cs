@@ -106,9 +106,12 @@ public partial class MainWindow
                 SetDriveStatus(bad, "Red");
                 return (false, bad);
             }
-            Clipboard.SetText(DriveBridgeScript.WithKey(key));
+            // A pasta configurada também vai no código (PASTAS_PERMITIDAS): o Google só aceitará essa pasta e as de dentro dela.
+            var rootId = DriveLink.ParseFolderId(DriveFolderBox.Text);
+            Clipboard.SetText(DriveBridgeScript.WithKey(key, rootId));
             var msg = (generated ? "Chave gerada. " : "") +
-                      $"Código copiado, com a sua chave JÁ DENTRO (linha {DriveBridgeScript.KeyLine}, \"const CHAVE\"). Você não precisa alterar nada: " +
+                      $"Código copiado, com a sua chave JÁ DENTRO (linha {DriveBridgeScript.KeyLine}, \"const CHAVE\")" +
+                      (DriveLink.ParseFolderId(DriveFolderBox.Text) != null ? " e a sua pasta liberada" : "") + ". Você não precisa alterar nada: " +
                       "agora vá ao script.new, selecione tudo (Ctrl+A), apague (Delete), cole (Ctrl+V) e salve (Ctrl+S).";
             SetDriveStatus(msg, "Green");
             return (true, msg);
@@ -167,28 +170,46 @@ public partial class MainWindow
     }
 
     // ---------------------------------------------------------------- fluxo após gravar
-    private async Task OfferDriveAsync(string path)
+    private sealed record DriveTarget(string FolderId, string PathText);
+
+    /// <summary>Pergunta se o usuário quer enviar o vídeo ao Drive.</summary>
+    private bool AskSendToDrive(string path)
     {
-        if (!DriveConfigured() || !File.Exists(path)) return;
-        if (DriveAutoCheck.IsChecked != true)
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+        long size = File.Exists(path) ? new FileInfo(path).Length : 0;
+        var ans = MessageBox.Show(this,
+            $"Gravação concluída.\n\nDeseja enviar o vídeo para o Google Drive da empresa?\n\n{System.IO.Path.GetFileName(path)}  ({TimeFormat.Bytes(size)})",
+            "TelaRec — Google Drive", MessageBoxButton.YesNo, MessageBoxImage.Question);
+        return ans == MessageBoxResult.Yes;
+    }
+
+    /// <summary>Abre o navegador de pastas (sempre começando na raiz configurada). Null se o usuário cancelar.</summary>
+    private DriveTarget? ChooseDriveFolder()
+    {
+        if (!ValidateDriveFields(out var rootId, out var url, out var key))
         {
-            if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
-            Activate();
-            long size = new FileInfo(path).Length;
-            var ans = MessageBox.Show(this,
-                $"Gravação concluída.\n\nDeseja enviar o vídeo para o Google Drive da empresa?\n\n{System.IO.Path.GetFileName(path)}  ({TimeFormat.Bytes(size)})",
-                "TelaRec — Google Drive", MessageBoxButton.YesNo, MessageBoxImage.Question);
-            if (ans != MessageBoxResult.Yes) return;
+            ShowError("Configure o envio ao Google Drive (seção Google Drive) antes de enviar.");
+            return null;
         }
-        await UploadToDriveAsync(path);
+        if (WindowState == WindowState.Minimized) WindowState = WindowState.Normal;
+        Activate();
+        var win = new DriveFolderWindow(rootId,
+            id => DriveUploader.ListAsync(url, key, rootId, id, CancellationToken.None),
+            (parent, name) => DriveUploader.CreateFolderAsync(url, key, rootId, parent, name, CancellationToken.None))
+        { Owner = this };
+        win.ShowDialog();
+        return win.Confirmed && win.SelectedFolderId != null ? new DriveTarget(win.SelectedFolderId, win.SelectedPath) : null;
     }
 
     private async void DriveButton_Click(object sender, RoutedEventArgs e)
     {
-        if (_lastFile != null) await UploadToDriveAsync(_lastFile);
+        if (_lastFile == null) return;
+        var target = ChooseDriveFolder();
+        if (target != null) await UploadToDriveAsync(_lastFile, target.FolderId, target.PathText);
     }
 
-    private async Task UploadToDriveAsync(string path)
+    private async Task UploadToDriveAsync(string path, string? targetFolderId = null, string? targetPath = null)
     {
         if (_uploading) { MessageBox.Show(this, "Já existe um envio em andamento.", "TelaRec", MessageBoxButton.OK, MessageBoxImage.Information); return; }
         if (!File.Exists(path)) { ShowError("O arquivo de vídeo não foi encontrado: " + path); return; }
@@ -208,12 +229,12 @@ public partial class MainWindow
                 var win = new UploadProgressWindow(name, new FileInfo(path).Length) { Owner = this };
                 win.Show();
                 UploadResult res;
-                try { res = await DriveUploader.UploadAsync(url, key, folderId, path, win.Progress, win.Token); }
+                try { res = await DriveUploader.UploadAsync(url, key, targetFolderId ?? folderId, path, win.Progress, win.Token, "video/mp4", folderId); }
                 finally { win.Finish(); }
 
                 if (res.Success)
                 {
-                    new DriveResultWindow(res.Link!, name) { Owner = this }.ShowDialog();
+                    new DriveResultWindow(res.Link!, name, targetPath) { Owner = this }.ShowDialog();
                     return;
                 }
                 if (res.Cancelled) { ShowInfo("Envio ao Google Drive cancelado. O vídeo continua salvo no computador."); return; }

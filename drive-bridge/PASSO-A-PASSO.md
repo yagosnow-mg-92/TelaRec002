@@ -67,6 +67,11 @@ O Google guarda a publicação como uma "foto" do código. Se você mudou o cód
 3. Em **Versão**, escolha **Nova versão**.
 4. Clique em **Implantar**. O URL continua o mesmo.
 
+## Escolher a pasta no Drive (a cada gravação)
+Ao finalizar a gravação e responder **Sim** à pergunta do Drive, abre o navegador de pastas, sempre na **pasta raiz** que você configurou. Dê dois cliques para abrir uma pasta, use **Voltar** (desativado na raiz) e **Nova pasta** para criar uma. Clique em **Salvar aqui** para salvar na pasta mostrada. Depois escolha o nome do arquivo.
+
+**Trocou a pasta do Drive nas configurações?** O código copiado já libera a pasta que estava configurada na hora da cópia. Se trocar a pasta: **Copiar código do script** → colar no script.new → **Etapa 6** (Nova versão). Sem isso o teste mostra "não é permitida pelo script".
+
 ## Dúvidas comuns
 **"Criei a implantação antes de colocar a chave. Errei?"** Não. É só fazer a Etapa 6 para publicar a versão com a chave.
 

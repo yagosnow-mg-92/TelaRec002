@@ -80,7 +80,7 @@ internal sealed class UploadProgressWindow : Window
 /// <summary>Janela final com o link do vídeo e o botão de copiar.</summary>
 internal sealed class DriveResultWindow : Window
 {
-    public DriveResultWindow(string link, string fileName)
+    public DriveResultWindow(string link, string fileName, string? folderPath = null)
     {
         Title = "Vídeo enviado!";
         Width = 600; SizeToContent = SizeToContent.Height; ResizeMode = ResizeMode.NoResize;
@@ -121,6 +121,8 @@ internal sealed class DriveResultWindow : Window
         var panel = new StackPanel { Margin = new Thickness(24) };
         panel.Children.Add(new TextBlock { Text = "✓  Vídeo enviado para o Google Drive", FontSize = 18, FontWeight = FontWeights.SemiBold, Foreground = WinUi.Res("Green") });
         panel.Children.Add(new TextBlock { Text = fileName, Foreground = WinUi.Res("Muted"), Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap });
+        if (!string.IsNullOrWhiteSpace(folderPath))
+            panel.Children.Add(new TextBlock { Text = "Pasta no Drive: " + folderPath, Foreground = WinUi.Res("Muted"), FontSize = 12, Margin = new Thickness(0, 2, 0, 0), TextWrapping = TextWrapping.Wrap });
         panel.Children.Add(new TextBlock { Text = "Link do vídeo (quem tem acesso à pasta consegue abrir):", Margin = new Thickness(0, 16, 0, 0) });
         panel.Children.Add(box);
         panel.Children.Add(buttons);
@@ -218,7 +220,9 @@ internal sealed class DriveHelpWindow : Window
             T("Mudou o código ou a chave depois de publicar?", bold: true),
             T("O Google guarda a publicação como uma \"foto\" do código. Para atualizar a foto:\n" +
               "   • Implantar → Gerenciar implantações;\n   • clique no ícone do lápis (Editar);\n   • em \"Versão\" escolha  Nova versão;\n   • clique em Implantar (o URL continua o mesmo).\n" +
-              "Sem isso o Google continua usando o código antigo.", margin: new Thickness(0, 6, 0, 0))));
+              "Sem isso o Google continua usando o código antigo.\n\n" +
+              "Trocou a pasta do Drive nas configurações? O código copiado pelo botão já libera a pasta que estava configurada na hora da cópia. " +
+              "Se você trocar a pasta, copie o código de novo, cole no script.new e crie uma Nova versão.", margin: new Thickness(0, 6, 0, 0))));
 
         // ---- Erros
         Add(Card(
@@ -228,6 +232,7 @@ internal sealed class DriveHelpWindow : Window
               "• \"O script publicado é de uma versão antiga\" → cole o código novo (Passo 2) e crie uma Nova versão.\n" +
               "• \"O Google respondeu com uma página…\" → confira o Passo 4 (\"Qualquer pessoa\") e crie uma Nova versão.\n" +
               "• \"insufficient authentication scopes\" / \"não tem permissão para criar arquivos\" → no editor do script rode a função \"autorizar\" de novo, aceite as permissões e crie uma Nova versão.\n" +
+              "• \"não é permitida pelo script\" → a pasta do TelaRec não é a que está liberada no script: copie o código de novo, cole e crie uma Nova versão.\n" +
               "• \"Pasta não encontrada\" → o link da pasta está errado ou a conta que criou o script não tem acesso a ela.\n" +
               "• Qualquer \"Detalhe técnico\" → copie o texto inteiro e envie ao suporte.", muted: true, margin: new Thickness(0, 6, 0, 0))));
 
