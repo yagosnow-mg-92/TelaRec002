@@ -83,3 +83,9 @@ Marque conforme for validando. Para cada item anote Windows, GPU e resultado.
 | 73 | Modo "enviar automaticamente": vai para a raiz sem abrir o navegador de pastas | ☐ |
 | 74 | Trocar a pasta nas configurações sem recopiar o script: erro claro "não é permitida pelo script" com instrução | ☐ |
 | 75 | Botão "Enviar ao Drive" (depois da gravação) também abre o navegador de pastas | ☐ |
+| 76 | Atualizar o script para a v6: "Testar conexão" mostra "script v6" | ☐ |
+| 77 | Janela de pastas abre larga o bastante: ao clicar em "Nova pasta" os botões Criar e Cancelar aparecem inteiros | ☐ |
+| 78 | Redimensionar a janela de pastas, fechar e abrir de novo: abre no tamanho escolhido (também após fechar o programa) | ☐ |
+| 79 | Ordenar por Nome / Mais recentes / Mais antigas: a lista reordena na hora e a escolha é lembrada | ☐ |
+| 80 | Pesquisar "505": o trecho aparece destacado em cor, a pasta é selecionada/rolada na lista, Enter vai para a próxima, Esc limpa; a lista NÃO é filtrada e nada é aberto | ☐ |
+| 81 | Pasta inexistente na pesquisa: mensagem "Nenhuma pasta encontrada…"; testar com acentos e maiúsculas/minúsculas | ☐ |

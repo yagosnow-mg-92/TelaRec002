@@ -196,9 +196,15 @@ public partial class MainWindow
         Activate();
         var win = new DriveFolderWindow(rootId,
             id => DriveUploader.ListAsync(url, key, rootId, id, CancellationToken.None),
-            (parent, name) => DriveUploader.CreateFolderAsync(url, key, rootId, parent, name, CancellationToken.None))
+            (parent, name) => DriveUploader.CreateFolderAsync(url, key, rootId, parent, name, CancellationToken.None),
+            _cfg.DriveFolderSort, _cfg.DriveFolderWindowWidth, _cfg.DriveFolderWindowHeight)
         { Owner = this };
         win.ShowDialog();
+
+        // Lembra a ordem escolhida e o tamanho da janela para a próxima vez.
+        _cfg.DriveFolderSort = win.SortMode;
+        if (win.SavedWidth > 0 && win.SavedHeight > 0) { _cfg.DriveFolderWindowWidth = win.SavedWidth; _cfg.DriveFolderWindowHeight = win.SavedHeight; }
+        _cfg.Save(_settingsPath);
         return win.Confirmed && win.SelectedFolderId != null ? new DriveTarget(win.SelectedFolderId, win.SelectedPath) : null;
     }
 

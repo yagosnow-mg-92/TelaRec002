@@ -93,6 +93,11 @@ public sealed class AppSettings
     public string? DriveScriptUrl { get; set; }
     /// <summary>Chave secreta do script, protegida com DPAPI (somente neste usuário do Windows).</summary>
     public string? DriveKeyEnc { get; set; }
+    /// <summary>Ordem da lista de pastas do Drive: 0 = nome, 1 = mais recentes, 2 = mais antigas.</summary>
+    public int DriveFolderSort { get; set; } = 1;
+    /// <summary>Tamanho lembrado da janela de pastas do Drive (0 = padrão).</summary>
+    public double DriveFolderWindowWidth { get; set; }
+    public double DriveFolderWindowHeight { get; set; }
 
     public static AppSettings Load(string path)
     {

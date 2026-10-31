@@ -312,6 +312,7 @@ public class DriveTests
         var c = DriveBridgeScript.Code;
         Assert.Contains("req.action === 'list'", c);
         Assert.Contains("req.action === 'mkdir'", c);
+        Assert.Contains("getDateCreated", c);                 // permite ordenar por data de criação
         Assert.Contains("function dentroDaRaiz_", c);
         Assert.Contains("PASTAS_PERMITIDAS.indexOf(raizId) < 0", c);   // a raiz pode ser travada no próprio Google
         Assert.Contains("dentroDaRaiz_(pastaId, raizId)", c);          // tudo precisa estar dentro da raiz
@@ -345,6 +346,22 @@ public class DriveTests
         Assert.Equal(32, a.Length);
         Assert.NotEqual(a, b);
         Assert.All(a, c => Assert.True(char.IsLetterOrDigit(c)));
+    }
+
+    [Fact]
+    public void Settings_DriveFolderWindowRoundTrip()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "telarec-fw-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            new AppSettings { DriveFolderSort = 2, DriveFolderWindowWidth = 900.5, DriveFolderWindowHeight = 720 }.Save(path);
+            var s = AppSettings.Load(path);
+            Assert.Equal(2, s.DriveFolderSort);
+            Assert.Equal(900.5, s.DriveFolderWindowWidth);
+            Assert.Equal(720, s.DriveFolderWindowHeight);
+            Assert.Equal(1, new AppSettings().DriveFolderSort);   // padrão: mais recentes
+        }
+        finally { try { File.Delete(path); } catch { } }
     }
 
     [Fact]

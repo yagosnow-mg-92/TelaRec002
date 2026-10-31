@@ -21,7 +21,7 @@ internal sealed class UploadResult
 }
 
 internal sealed record DriveCheckResult(bool Ok, string Message);
-internal sealed record DriveFolder(string Id, string Name);
+internal sealed record DriveFolder(string Id, string Name, long Created = 0);
 internal sealed record DriveListing(bool Ok, string? Error, string Name, List<DriveFolder> Folders);
 internal sealed record DriveCreateResult(bool Ok, string? Error, DriveFolder? Folder, bool Existed);
 
@@ -240,7 +240,8 @@ internal static class DriveUploader
             var list = new List<DriveFolder>();
             if (r.TryGetProperty("folders", out var arr) && arr.ValueKind == JsonValueKind.Array)
                 foreach (var f in arr.EnumerateArray())
-                    list.Add(new DriveFolder(Str(f, "id") ?? "", Str(f, "name") ?? ""));
+                    list.Add(new DriveFolder(Str(f, "id") ?? "", Str(f, "name") ?? "",
+                        f.TryGetProperty("created", out var c) && c.ValueKind == JsonValueKind.Number ? c.GetInt64() : 0));
             return new DriveListing(true, null, Str(r, "name") ?? "", list);
         }
         catch (DriveException ex) { return new DriveListing(false, ex.Message, "", new()); }

@@ -1,5 +1,5 @@
 /**
- * TelaRec - Ponte de envio ao Google Drive (Google Apps Script)  -  versão 5
+ * TelaRec - Ponte de envio ao Google Drive (Google Apps Script)  -  versão 6
  *
  * O QUE É A "CHAVE"?  É uma SENHA que o TelaRec gera para você. Ela NÃO vem do Google e NÃO é o ID da implantação.
  * A mesma senha fica em dois lugares: aqui no script (linha "const CHAVE") e no campo "Chave secreta" do TelaRec.
@@ -24,7 +24,7 @@
  * enviar arquivos, ver os NOMES das subpastas e criar pastas. Pode apagar apenas arquivos de TESTE do TelaRec
  * (nome começando com "TelaRec-teste-"). Não consegue ler arquivos nem apagar mais nada.
  */
-const VERSAO = 5; // usada pelo TelaRec para saber se a publicação está atualizada (não altere)
+const VERSAO = 6; // usada pelo TelaRec para saber se a publicação está atualizada (não altere)
 
 const CHAVE = 'TROQUE-POR-UMA-CHAVE-LONGA';
 
@@ -88,7 +88,7 @@ function doPost(e) {
       const lista = [];
       while (it.hasNext() && lista.length < 1000) {
         const f = it.next();
-        lista.push({ id: f.getId(), name: f.getName() });
+        lista.push({ id: f.getId(), name: f.getName(), created: f.getDateCreated().getTime() });
       }
       lista.sort(function (a, b) {
         const x = a.name.toLowerCase(), y = b.name.toLowerCase();
