@@ -29,6 +29,21 @@ public static class FileNamer
         return s;
     }
 
+    /// <summary>
+    /// Devolve <paramref name="baseName"/> se "baseName.mp4" ainda não existe entre os arquivos informados (sem diferenciar
+    /// maiúsculas/minúsculas); senão acrescenta " (2)", " (3)"… até achar um nome livre.
+    /// </summary>
+    public static string UniqueAmong(string baseName, IEnumerable<string> existingFileNames)
+    {
+        var set = new HashSet<string>(existingFileNames, StringComparer.OrdinalIgnoreCase);
+        if (!set.Contains(baseName + ".mp4")) return baseName;
+        for (int i = 2; ; i++)
+        {
+            var candidate = $"{baseName} ({i})";
+            if (!set.Contains(candidate + ".mp4")) return candidate;
+        }
+    }
+
     public static string DefaultName(DateTime now) => $"TelaRec_{now:yyyy-MM-dd_HH-mm-ss}";
 
     /// <summary>Nunca devolve um caminho de arquivo já existente (não sobrescreve gravações).</summary>

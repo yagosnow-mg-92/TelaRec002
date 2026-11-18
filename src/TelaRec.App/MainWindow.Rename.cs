@@ -24,15 +24,24 @@ public partial class MainWindow
             }
         }
 
+        // Nomes que já existem na pasta do Drive escolhida (para não repetir o nome do arquivo).
+        IReadOnlyCollection<string>? driveNames = null;
+        string? drivePath = null;
+        if (sendToDrive)
+        {
+            if (target != null) { driveNames = target.ExistingFileNames; drivePath = target.PathText; }
+            else { driveNames = await TryListRootNamesAsync(); drivePath = driveNames != null ? "pasta da empresa (raiz)" : null; }
+        }
+
         // 2) Nome do arquivo.
-        var finalPath = AskFileName(path);
+        var finalPath = AskFileName(path, driveNames, drivePath);
 
         // 3) Envio.
         if (sendToDrive) await UploadToDriveAsync(finalPath, target?.FolderId, target?.PathText);
     }
 
     /// <summary>Mostra a janela de nome do arquivo e renomeia o vídeo. Devolve o caminho final.</summary>
-    private string AskFileName(string path)
+    private string AskFileName(string path, IReadOnlyCollection<string>? driveNames = null, string? drivePath = null)
     {
         try
         {
@@ -43,10 +52,12 @@ public partial class MainWindow
             var folder = System.IO.Path.GetDirectoryName(path)!;
             var current = System.IO.Path.GetFileNameWithoutExtension(path);
 
-            var win = new RenameWindow(current, folder) { Owner = this };
+            var win = new RenameWindow(current, folder, driveNames, drivePath) { Owner = this };
             win.ShowDialog();
 
             var wanted = FileNamer.SafeName(win.ChosenName);
+            // Fechou a janela pelo X com um nome já usado no Drive: acrescenta um número em vez de repetir.
+            if (wanted.Length > 0 && driveNames != null) wanted = FileNamer.UniqueAmong(wanted, driveNames);
             if (wanted.Length == 0 || string.Equals(wanted, current, StringComparison.Ordinal)) return path;
 
             var target = System.IO.Path.Combine(folder, wanted + ".mp4");

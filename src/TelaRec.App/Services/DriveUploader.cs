@@ -22,7 +22,8 @@ internal sealed class UploadResult
 
 internal sealed record DriveCheckResult(bool Ok, string Message);
 internal sealed record DriveFolder(string Id, string Name, long Created = 0);
-internal sealed record DriveListing(bool Ok, string? Error, string Name, List<DriveFolder> Folders);
+internal sealed record DriveFile(string Id, string Name, long Size, long Created);
+internal sealed record DriveListing(bool Ok, string? Error, string Name, List<DriveFolder> Folders, List<DriveFile>? Files = null);
 internal sealed record DriveCreateResult(bool Ok, string? Error, DriveFolder? Folder, bool Existed);
 
 internal sealed class DriveException : Exception
@@ -242,7 +243,13 @@ internal static class DriveUploader
                 foreach (var f in arr.EnumerateArray())
                     list.Add(new DriveFolder(Str(f, "id") ?? "", Str(f, "name") ?? "",
                         f.TryGetProperty("created", out var c) && c.ValueKind == JsonValueKind.Number ? c.GetInt64() : 0));
-            return new DriveListing(true, null, Str(r, "name") ?? "", list);
+            var files = new List<DriveFile>();
+            if (r.TryGetProperty("files", out var farr) && farr.ValueKind == JsonValueKind.Array)
+                foreach (var f in farr.EnumerateArray())
+                    files.Add(new DriveFile(Str(f, "id") ?? "", Str(f, "name") ?? "",
+                        f.TryGetProperty("size", out var sz) && sz.ValueKind == JsonValueKind.Number ? sz.GetInt64() : 0,
+                        f.TryGetProperty("created", out var cr) && cr.ValueKind == JsonValueKind.Number ? cr.GetInt64() : 0));
+            return new DriveListing(true, null, Str(r, "name") ?? "", list, files);
         }
         catch (DriveException ex) { return new DriveListing(false, ex.Message, "", new()); }
         catch (HttpRequestException ex) { return new DriveListing(false, "Sem conexão com o Google: " + ex.Message, "", new()); }

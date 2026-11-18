@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using TelaRec.Core;
 using TelaRec.Services;
 
 namespace TelaRec;
@@ -22,6 +23,7 @@ internal sealed class DriveFolderWindow : Window
     private readonly Func<string, string, Task<DriveCreateResult>> _create;
     private readonly List<DriveFolder> _stack = new();     // [0] = raiz, último = pasta atual
     private List<DriveFolder> _folders = new();
+    private List<DriveFile> _files = new();
 
     private readonly ListBox _lb = new();
     private readonly TextBlock _path = new();
@@ -42,6 +44,9 @@ internal sealed class DriveFolderWindow : Window
     public double SavedHeight { get; private set; }
     public string? SelectedFolderId => _stack.Count > 0 ? _stack[^1].Id : null;
     public string SelectedPath => string.Join(" / ", _stack.Select(f => f.Name));
+
+    /// <summary>Nomes dos arquivos que existem na pasta atual (usados para avisar de nomes repetidos).</summary>
+    public IReadOnlyCollection<string> CurrentFileNames => _files.Select(f => f.Name).ToList();
 
     public DriveFolderWindow(string rootId, Func<string, Task<DriveListing>> list,
         Func<string, string, Task<DriveCreateResult>> create, int sortMode, double width, double height)
@@ -189,7 +194,7 @@ internal sealed class DriveFolderWindow : Window
         _search.Text = "";
         if (!r.Ok)
         {
-            _folders = new(); Render();
+            _folders = new(); _files = new(); Render();
             _status.Text = r.Error ?? "Não foi possível listar as pastas."; _status.Foreground = WinUi.Res("Red");
             UpdatePath(); SetBusy(false);
             _ok.IsEnabled = false;                        // não salva em uma pasta que não carregou
@@ -197,10 +202,11 @@ internal sealed class DriveFolderWindow : Window
         }
         if (_stack.Count == 1 && !string.IsNullOrWhiteSpace(r.Name)) _stack[0] = new DriveFolder(_rootId, r.Name);
         _folders = r.Folders;
+        _files = r.Files ?? new();
         UpdatePath(); SetBusy(false);
-        _baseStatus = r.Folders.Count == 0
-            ? "Esta pasta ainda não tem subpastas. Você pode criar uma ou salvar aqui."
-            : $"{r.Folders.Count} subpasta(s). Clique duas vezes para abrir.";
+        _baseStatus = (_folders.Count == 0 && _files.Count == 0)
+            ? "Esta pasta está vazia. Você pode criar uma subpasta ou salvar aqui."
+            : $"{_folders.Count} subpasta(s) e {_files.Count} arquivo(s). Clique duas vezes numa pasta para abrir; os arquivos aparecem só para você conferir os nomes.";
         Render();
         _status.Foreground = WinUi.Res("Muted");
     }
@@ -215,37 +221,62 @@ internal sealed class DriveFolderWindow : Window
     private static int IndexOfIgnoringCase(string text, string query) =>
         CultureInfo.CurrentCulture.CompareInfo.IndexOf(text, query, CompareOptions.IgnoreCase | CompareOptions.IgnoreNonSpace);
 
-    private UIElement BuildRow(DriveFolder f, string query)
+    private IEnumerable<DriveFile> SortedFiles() => SortMode switch
     {
-        var tb = new TextBlock { TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center };
-        tb.Inlines.Add(new Run("📁  "));
-        int idx = query.Length > 0 ? IndexOfIgnoringCase(f.Name, query) : -1;
+        SortNewest => _files.OrderByDescending(f => f.Created).ThenBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase),
+        SortOldest => _files.OrderBy(f => f.Created).ThenBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase),
+        _ => _files.OrderBy(f => f.Name, StringComparer.CurrentCultureIgnoreCase),
+    };
+
+    private static string FileIcon(string name) =>
+        new[] { ".mp4", ".mov", ".mkv", ".avi", ".webm" }.Any(e => name.EndsWith(e, StringComparison.OrdinalIgnoreCase)) ? "🎬  " : "📄  ";
+
+    /// <summary>Linha da lista: ícone + nome (com o trecho pesquisado em destaque) + tamanho + data de criação.</summary>
+    private UIElement BuildRow(string icon, string name, long created, long size, string query, bool muted)
+    {
+        var tb = new TextBlock
+        {
+            TextTrimming = TextTrimming.CharacterEllipsis, VerticalAlignment = VerticalAlignment.Center,
+            Foreground = muted ? WinUi.Res("Muted") : WinUi.Res("Text"),
+        };
+        tb.Inlines.Add(new Run(icon));
+        int idx = query.Length > 0 ? IndexOfIgnoringCase(name, query) : -1;
         if (idx >= 0)
         {
-            int len = Math.Min(query.Length, f.Name.Length - idx);
-            tb.Inlines.Add(new Run(f.Name[..idx]));
-            tb.Inlines.Add(new Run(f.Name.Substring(idx, len))
+            int len = Math.Min(query.Length, name.Length - idx);
+            tb.Inlines.Add(new Run(name[..idx]));
+            tb.Inlines.Add(new Run(name.Substring(idx, len))
             { Background = WinUi.Res("Amber"), Foreground = Brushes.Black, FontWeight = FontWeights.Bold });
-            tb.Inlines.Add(new Run(f.Name[(idx + len)..]));
+            tb.Inlines.Add(new Run(name[(idx + len)..]));
         }
-        else tb.Inlines.Add(new Run(f.Name));
+        else tb.Inlines.Add(new Run(name));
 
         var row = new Grid();
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.Children.Add(tb);
-        if (f.Created > 0)
+
+        var info = new List<string>();
+        if (size > 0) info.Add(TimeFormat.Bytes(size));
+        if (created > 0) info.Add(DateTimeOffset.FromUnixTimeMilliseconds(created).LocalDateTime.ToString("dd/MM/yyyy HH:mm"));
+        if (info.Count > 0)
         {
-            var date = new TextBlock
+            var meta = new TextBlock
             {
-                Text = DateTimeOffset.FromUnixTimeMilliseconds(f.Created).LocalDateTime.ToString("dd/MM/yyyy HH:mm"),
-                Foreground = WinUi.Res("Muted"), FontSize = 12, VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0),
+                Text = string.Join("   ", info), Foreground = WinUi.Res("Muted"), FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center, Margin = new Thickness(12, 0, 0, 0),
             };
-            Grid.SetColumn(date, 1);
-            row.Children.Add(date);
+            Grid.SetColumn(meta, 1);
+            row.Children.Add(meta);
         }
         return row;
     }
+
+    private static ListBoxItem Header(string text) => new()
+    {
+        Content = new TextBlock { Text = text, FontSize = 12, FontWeight = FontWeights.SemiBold, Foreground = WinUi.Res("Muted"), Margin = new Thickness(4, 6, 0, 2) },
+        IsEnabled = false, Focusable = false,
+    };
 
     /// <summary>Redesenha a lista conforme a ordem e a pesquisa (a pesquisa só destaca: não filtra nem abre nada).</summary>
     private void Render()
@@ -253,9 +284,19 @@ internal sealed class DriveFolderWindow : Window
         var q = _search.Text.Trim();
         _lb.Items.Clear();
         _matches.Clear(); _matchPos = -1;
+
+        if (_folders.Count > 0) _lb.Items.Add(Header($"PASTAS ({_folders.Count})"));
         foreach (var f in Sorted())
         {
-            var item = new ListBoxItem { Content = BuildRow(f, q), Tag = f, Style = WinUi.Sty("MicItem") };
+            var item = new ListBoxItem { Content = BuildRow("📁  ", f.Name, f.Created, 0, q, false), Tag = f, Style = WinUi.Sty("MicItem") };
+            _lb.Items.Add(item);
+            if (q.Length > 0 && IndexOfIgnoringCase(f.Name, q) >= 0) _matches.Add(item);
+        }
+
+        if (_files.Count > 0) _lb.Items.Add(Header($"ARQUIVOS NESTA PASTA ({_files.Count})"));
+        foreach (var f in SortedFiles())
+        {
+            var item = new ListBoxItem { Content = BuildRow(FileIcon(f.Name), f.Name, f.Created, f.Size, q, true), Tag = f, Style = WinUi.Sty("MicItem") };
             _lb.Items.Add(item);
             if (q.Length > 0 && IndexOfIgnoringCase(f.Name, q) >= 0) _matches.Add(item);
         }
@@ -263,7 +304,7 @@ internal sealed class DriveFolderWindow : Window
         if (q.Length == 0) { _status.Text = _baseStatus; _status.Foreground = WinUi.Res("Muted"); return; }
         if (_matches.Count == 0)
         {
-            _status.Text = $"Nenhuma pasta encontrada com \"{q}\" nesta pasta.";
+            _status.Text = $"Nada encontrado com \"{q}\" nesta pasta.";
             _status.Foreground = WinUi.Res("Amber");
             return;
         }
@@ -276,7 +317,7 @@ internal sealed class DriveFolderWindow : Window
         var item = _matches[pos];
         _lb.SelectedItem = item;
         _lb.ScrollIntoView(item);
-        _status.Text = $"{_matches.Count} pasta(s) encontrada(s) — mostrando a {pos + 1}ª. Enter vai para a próxima; dê dois cliques para abrir.";
+        _status.Text = $"{_matches.Count} item(ns) encontrado(s) — mostrando o {pos + 1}º. Enter vai para o próximo; dê dois cliques numa pasta para abrir.";
         _status.Foreground = WinUi.Res("Green");
     }
 

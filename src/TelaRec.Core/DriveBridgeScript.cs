@@ -6,7 +6,7 @@ public static class DriveBridgeScript
     public const string Placeholder = "TROQUE-POR-UMA-CHAVE-LONGA";
 
     /// <summary>Versão do script que este programa espera (o script informa a sua no teste de conexão).</summary>
-    public const int Version = 6;
+    public const int Version = 7;
 
     public const string AllowedFoldersLine = "const PASTAS_PERMITIDAS = [];";
 
@@ -37,7 +37,7 @@ public static class DriveBridgeScript
 
     public const string Code = """
 /**
- * TelaRec - Ponte de envio ao Google Drive (Google Apps Script)  -  versão 6
+ * TelaRec - Ponte de envio ao Google Drive (Google Apps Script)  -  versão 7
  *
  * O QUE É A "CHAVE"?  É uma SENHA que o TelaRec gera para você. Ela NÃO vem do Google e NÃO é o ID da implantação.
  * A mesma senha fica em dois lugares: aqui no script (linha "const CHAVE") e no campo "Chave secreta" do TelaRec.
@@ -59,10 +59,10 @@ public static class DriveBridgeScript
  *   Altere SOMENTE o texto entre as aspas dessa linha. Nenhuma outra linha deve ser editada.
  *
  * SEGURANÇA: quem tiver o URL + a CHAVE consegue, SOMENTE dentro da pasta configurada no TelaRec (e suas subpastas):
- * enviar arquivos, ver os NOMES das subpastas e criar pastas. Pode apagar apenas arquivos de TESTE do TelaRec
+ * enviar arquivos, ver os NOMES das subpastas e dos arquivos e criar pastas. Pode apagar apenas arquivos de TESTE do TelaRec
  * (nome começando com "TelaRec-teste-"). Não consegue ler arquivos nem apagar mais nada.
  */
-const VERSAO = 6; // usada pelo TelaRec para saber se a publicação está atualizada (não altere)
+const VERSAO = 7; // usada pelo TelaRec para saber se a publicação está atualizada (não altere)
 
 const CHAVE = 'TROQUE-POR-UMA-CHAVE-LONGA';
 
@@ -117,7 +117,7 @@ function doPost(e) {
       });
     }
 
-    // Lista as subpastas (somente nomes e ids) de uma pasta.
+    // Lista as subpastas e os arquivos (somente nomes, tamanhos e datas; nunca o conteúdo) de uma pasta.
     if (req.action === 'list') {
       let pasta;
       try { pasta = DriveApp.getFolderById(pastaId); }
@@ -132,7 +132,15 @@ function doPost(e) {
         const x = a.name.toLowerCase(), y = b.name.toLowerCase();
         return x < y ? -1 : (x > y ? 1 : 0);
       });
-      return resposta_({ ok: true, name: pasta.getName(), folders: lista, truncated: lista.length >= 1000 });
+      const arquivos = [];
+      if (req.files !== false) {
+        const ia = pasta.getFiles();
+        while (ia.hasNext() && arquivos.length < 1000) {
+          const a = ia.next();
+          arquivos.push({ id: a.getId(), name: a.getName(), size: a.getSize(), created: a.getDateCreated().getTime() });
+        }
+      }
+      return resposta_({ ok: true, name: pasta.getName(), folders: lista, files: arquivos, truncated: lista.length >= 1000 || arquivos.length >= 1000 });
     }
 
     // Cria uma subpasta (ou devolve a que já existe com o mesmo nome).

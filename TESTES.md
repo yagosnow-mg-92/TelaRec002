@@ -89,3 +89,9 @@ Marque conforme for validando. Para cada item anote Windows, GPU e resultado.
 | 79 | Ordenar por Nome / Mais recentes / Mais antigas: a lista reordena na hora e a escolha é lembrada | ☐ |
 | 80 | Pesquisar "505": o trecho aparece destacado em cor, a pasta é selecionada/rolada na lista, Enter vai para a próxima, Esc limpa; a lista NÃO é filtrada e nada é aberto | ☐ |
 | 81 | Pasta inexistente na pesquisa: mensagem "Nenhuma pasta encontrada…"; testar com acentos e maiúsculas/minúsculas | ☐ |
+| 82 | Atualizar o script para a v7: "Testar conexão" mostra "script v7" | ☐ |
+| 83 | Navegador de pastas: abaixo das subpastas aparece "ARQUIVOS NESTA PASTA" com nome, tamanho e data; duplo clique num arquivo não faz nada | ☐ |
+| 84 | Pesquisar "filme 02": o arquivo existente fica destacado (e subpastas com o mesmo trecho também) | ☐ |
+| 85 | Tela de nome: digitar um nome que já existe na pasta do Drive escolhida → aviso vermelho e OK desativado; trocar o nome libera o OK | ☐ |
+| 86 | Fechar a tela de nome pelo X com nome repetido no Drive: o arquivo recebe "(2)" | ☐ |
+| 87 | Botão "Enviar ao Drive" manual com nome já existente: pede confirmação | ☐ |

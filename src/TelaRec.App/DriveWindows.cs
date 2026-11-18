@@ -238,7 +238,7 @@ internal sealed class DriveHelpWindow : Window
 
         Add(Card(
             T("Segurança", bold: true),
-            T("Quem souber o URL e a chave só consegue enviar arquivos para a pasta (não lê nem apaga nada). " +
+            T("Quem souber o URL e a chave consegue, somente dentro da pasta configurada, enviar arquivos, criar pastas e ver os NOMES de pastas e arquivos (nunca o conteúdo). Só apaga arquivos de teste do TelaRec. " +
               "Não compartilhe prints com o URL e a chave. Se vazarem: Gerar nova chave → Copiar código → colar no script → Nova versão.",
               muted: true, margin: new Thickness(0, 6, 0, 0))));
     }

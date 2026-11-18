@@ -170,7 +170,7 @@ public partial class MainWindow
     }
 
     // ---------------------------------------------------------------- fluxo após gravar
-    private sealed record DriveTarget(string FolderId, string PathText);
+    private sealed record DriveTarget(string FolderId, string PathText, IReadOnlyCollection<string> ExistingFileNames);
 
     /// <summary>Pergunta se o usuário quer enviar o vídeo ao Drive.</summary>
     private bool AskSendToDrive(string path)
@@ -182,6 +182,14 @@ public partial class MainWindow
             $"Gravação concluída.\n\nDeseja enviar o vídeo para o Google Drive da empresa?\n\n{System.IO.Path.GetFileName(path)}  ({TimeFormat.Bytes(size)})",
             "TelaRec — Google Drive", MessageBoxButton.YesNo, MessageBoxImage.Question);
         return ans == MessageBoxResult.Yes;
+    }
+
+    /// <summary>Nomes dos arquivos da pasta raiz (modo automático, sem navegador). Null se não foi possível listar.</summary>
+    private async Task<IReadOnlyCollection<string>?> TryListRootNamesAsync()
+    {
+        if (!ValidateDriveFields(out var rootId, out var url, out var key)) return null;
+        var r = await DriveUploader.ListAsync(url, key, rootId, rootId, CancellationToken.None);
+        return r.Ok ? (r.Files ?? new()).Select(f => f.Name).ToList() : null;
     }
 
     /// <summary>Abre o navegador de pastas (sempre começando na raiz configurada). Null se o usuário cancelar.</summary>
@@ -205,14 +213,22 @@ public partial class MainWindow
         _cfg.DriveFolderSort = win.SortMode;
         if (win.SavedWidth > 0 && win.SavedHeight > 0) { _cfg.DriveFolderWindowWidth = win.SavedWidth; _cfg.DriveFolderWindowHeight = win.SavedHeight; }
         _cfg.Save(_settingsPath);
-        return win.Confirmed && win.SelectedFolderId != null ? new DriveTarget(win.SelectedFolderId, win.SelectedPath) : null;
+        return win.Confirmed && win.SelectedFolderId != null ? new DriveTarget(win.SelectedFolderId, win.SelectedPath, win.CurrentFileNames) : null;
     }
 
     private async void DriveButton_Click(object sender, RoutedEventArgs e)
     {
         if (_lastFile == null) return;
         var target = ChooseDriveFolder();
-        if (target != null) await UploadToDriveAsync(_lastFile, target.FolderId, target.PathText);
+        if (target == null) return;
+        var fileName = System.IO.Path.GetFileName(_lastFile);
+        if (target.ExistingFileNames.Contains(fileName, StringComparer.OrdinalIgnoreCase))
+        {
+            var ans = MessageBox.Show(this, $"Já existe um arquivo chamado \"{fileName}\" na pasta \"{target.PathText}\".\n\nEnviar mesmo assim (ficará um arquivo repetido)?",
+                "TelaRec — Google Drive", MessageBoxButton.YesNo, MessageBoxImage.Warning);
+            if (ans != MessageBoxResult.Yes) return;
+        }
+        await UploadToDriveAsync(_lastFile, target.FolderId, target.PathText);
     }
 
     private async Task UploadToDriveAsync(string path, string? targetFolderId = null, string? targetPath = null)

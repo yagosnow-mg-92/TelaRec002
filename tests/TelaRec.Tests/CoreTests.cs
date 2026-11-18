@@ -103,6 +103,21 @@ public class HelpersTests : IDisposable
     public void SafeName_Works(string input, string expected) =>
         Assert.Equal(expected, FileNamer.SafeName(input));
 
+    [Theory]
+    [InlineData("filme 03", "filme 03")]
+    [InlineData("filme 01", "filme 01 (2)")]
+    [InlineData("FILME 01", "FILME 01 (2)")]           // sem diferenciar maiúsculas/minúsculas
+    [InlineData("filme 02", "filme 02 (3)")]           // "(2)" também existe: vai para "(3)"
+    public void UniqueAmong_AvoidsDuplicatesInDrive(string name, string expected)
+    {
+        var existing = new[] { "filme 01.mp4", "filme 02.mp4", "filme 02 (2).mp4", "outro.txt" };
+        Assert.Equal(expected, FileNamer.UniqueAmong(name, existing));
+    }
+
+    [Fact]
+    public void UniqueAmong_IgnoresOtherExtensions() =>
+        Assert.Equal("relatorio", FileNamer.UniqueAmong("relatorio", new[] { "relatorio.txt" }));
+
     [Fact]
     public void SafeName_LimitsLength() =>
         Assert.True(FileNamer.SafeName(new string('a', 400)).Length <= 150);
@@ -313,6 +328,7 @@ public class DriveTests
         Assert.Contains("req.action === 'list'", c);
         Assert.Contains("req.action === 'mkdir'", c);
         Assert.Contains("getDateCreated", c);                 // permite ordenar por data de criação
+        Assert.Contains("getFiles()", c);                     // lista os arquivos da pasta
         Assert.Contains("function dentroDaRaiz_", c);
         Assert.Contains("PASTAS_PERMITIDAS.indexOf(raizId) < 0", c);   // a raiz pode ser travada no próprio Google
         Assert.Contains("dentroDaRaiz_(pastaId, raizId)", c);          // tudo precisa estar dentro da raiz

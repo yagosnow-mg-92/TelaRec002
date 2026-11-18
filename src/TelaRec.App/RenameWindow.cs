@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using TelaRec.Core;
 
 namespace TelaRec;
 
@@ -15,7 +16,8 @@ internal sealed class RenameWindow : Window
     /// <summary>Nome escolhido, sem extensão (pode vir com caracteres inválidos; o chamador sanitiza).</summary>
     public string ChosenName { get; private set; }
 
-    public RenameWindow(string defaultNameWithoutExtension, string folder)
+    public RenameWindow(string defaultNameWithoutExtension, string folder,
+        IReadOnlyCollection<string>? driveNames = null, string? drivePath = null)
     {
         ChosenName = defaultNameWithoutExtension;
         Title = "Salvar gravação";
@@ -49,6 +51,9 @@ internal sealed class RenameWindow : Window
         Grid.SetColumn(ext, 1);
         row.Children.Add(ext);
 
+        var driveSet = new HashSet<string>(driveNames ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+        var warn = new TextBlock { Foreground = WinUi.Res("Red"), FontSize = 12, TextWrapping = TextWrapping.Wrap, Margin = new Thickness(0, 8, 0, 0), Visibility = Visibility.Collapsed };
+
         var ok = WinUi.MakeButton("OK", WinUi.Res("Accent"), 120);
         ok.IsDefault = true;                       // Enter também confirma
         ok.Margin = new Thickness(0);
@@ -68,6 +73,26 @@ internal sealed class RenameWindow : Window
             Text = "Pasta: " + folder, Foreground = WinUi.Res("Muted"), FontSize = 12,
             Margin = new Thickness(0, 10, 0, 0), TextWrapping = TextWrapping.Wrap,
         });
+        if (drivePath != null)
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"Pasta no Drive: {drivePath}  ({driveSet.Count} arquivo(s) nela)", Foreground = WinUi.Res("Muted"), FontSize = 12,
+                Margin = new Thickness(0, 4, 0, 0), TextWrapping = TextWrapping.Wrap,
+            });
+        panel.Children.Add(warn);
+
+        // Nome já existe na pasta do Drive? Avisa na hora e só libera o OK com outro nome.
+        void Check()
+        {
+            var candidate = FileNamer.SafeName(_box.Text);
+            bool dup = driveSet.Count > 0 && candidate.Length > 0 && driveSet.Contains(candidate + ".mp4");
+            warn.Visibility = dup ? Visibility.Visible : Visibility.Collapsed;
+            warn.Text = dup ? $"⚠ Já existe \"{candidate}.mp4\" nesta pasta do Drive. Escolha outro nome para não repetir." : "";
+            ok.IsEnabled = !dup;
+        }
+        _box.TextChanged += (_, _) => Check();
+        Check();
+
         var bottom = new Grid { Margin = new Thickness(0, 18, 0, 0) };
         bottom.Children.Add(ok);
         panel.Children.Add(bottom);
