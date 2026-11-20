@@ -95,3 +95,10 @@ Marque conforme for validando. Para cada item anote Windows, GPU e resultado.
 | 85 | Tela de nome: digitar um nome que já existe na pasta do Drive escolhida → aviso vermelho e OK desativado; trocar o nome libera o OK | ☐ |
 | 86 | Fechar a tela de nome pelo X com nome repetido no Drive: o arquivo recebe "(2)" | ☐ |
 | 87 | Botão "Enviar ao Drive" manual com nome já existente: pede confirmação | ☐ |
+| 88 | Iniciar gravação: a barra aparece centralizada no topo do monitor gravado (testar monitores 1, 2 e 3, com escalas de DPI diferentes e posições negativas) | ☐ |
+| 89 | A barra NÃO aparece no vídeo gravado (conferir o MP4) em Windows 10 e 11 | ☐ |
+| 90 | Mostra "INICIANDO…" e depois "GRAVANDO" com o cronômetro correndo; pausar mostra "PAUSADO" e troca ⏸ por ▶; continuar volta a "GRAVANDO" | ☐ |
+| 91 | Botão parar encerra e salva; a barra some e a janela principal volta (opção de minimizar ligada) | ☐ |
+| 92 | Clicar nas teclas da barra não gera círculo/som do efeito de clique e não tira o foco do aplicativo em uso | ☐ |
+| 93 | Com "Minimizar esta janela ao gravar" desligada, a janela principal permanece como está | ☐ |
+| 94 | Gravar outro monitor que não o da janela principal: a barra aparece no monitor gravado | ☐ |

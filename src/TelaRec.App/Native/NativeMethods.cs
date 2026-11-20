@@ -15,6 +15,7 @@ internal struct BITMAPINFOHEADER
 
 internal static class NativeMethods
 {
+    [DllImport("dwmapi.dll")] internal static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
     [DllImport("user32.dll")] internal static extern int GetWindowLong(IntPtr hWnd, int nIndex);
     [DllImport("user32.dll")] internal static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);
     [DllImport("user32.dll")]

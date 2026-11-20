@@ -88,6 +88,7 @@
                         <TextBlock Grid.Row="4" Text="Opções" VerticalAlignment="Top" Margin="0,2,0,0"/>
                         <StackPanel Grid.Row="4" Grid.Column="1">
                             <CheckBox x:Name="HwCheck" Content="Usar aceleração por hardware quando disponível" Foreground="{StaticResource Text}" Margin="0,0,0,6"/>
+                            <CheckBox x:Name="MinimizeCheck" Content="Minimizar esta janela ao gravar (use a barra flutuante no topo da tela)" Foreground="{StaticResource Text}" Margin="0,0,0,6"/>
                             <CheckBox x:Name="HideCheck" Content="Esconder esta janela da gravação" Foreground="{StaticResource Text}" Margin="0,0,0,6"/>
                             <StackPanel Orientation="Horizontal" Margin="0,0,0,6">
                                 <CheckBox x:Name="ClickFxCheck" VerticalAlignment="Center" Foreground="{StaticResource Text}"

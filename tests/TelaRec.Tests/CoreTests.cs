@@ -365,6 +365,19 @@ public class DriveTests
     }
 
     [Fact]
+    public void Settings_MinimizeOnRecord_DefaultsOnAndPersists()
+    {
+        Assert.True(new AppSettings().MinimizeOnRecord);
+        var path = Path.Combine(Path.GetTempPath(), "telarec-min-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            new AppSettings { MinimizeOnRecord = false }.Save(path);
+            Assert.False(AppSettings.Load(path).MinimizeOnRecord);
+        }
+        finally { try { File.Delete(path); } catch { } }
+    }
+
+    [Fact]
     public void Settings_DriveFolderWindowRoundTrip()
     {
         var path = Path.Combine(Path.GetTempPath(), "telarec-fw-" + Guid.NewGuid().ToString("N") + ".json");

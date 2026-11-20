@@ -91,6 +91,8 @@ public sealed class AppSettings
     public VideoQuality Quality { get; set; } = VideoQuality.Balanced;
     public bool UseHardware { get; set; } = true;
     public bool HideWindowFromCapture { get; set; } = true;
+    /// <summary>Minimiza a janela principal ao iniciar a gravação (os controles ficam na barra flutuante).</summary>
+    public bool MinimizeOnRecord { get; set; } = true;
     public bool ClickEffect { get; set; } = false;
     public bool ClickSound { get; set; } = true;
     public bool RecordSystemAudio { get; set; } = false;

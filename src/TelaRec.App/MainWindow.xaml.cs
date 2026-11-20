@@ -34,6 +34,8 @@ public partial class MainWindow : Window
     private string? _lastFile, _folderToOpen;
     private bool _affinityApplied;
     private bool _resuming;
+    private RecordingToolbar? _toolbar;
+    private bool _minimizedByUs;
     private readonly Dictionary<string, Border> _cards = new();
     private readonly MouseHook _hook = new();
     private ClickOverlay? _overlay;
@@ -63,6 +65,7 @@ public partial class MainWindow : Window
         }
         HwCheck.IsChecked = _cfg.UseHardware;
         HideCheck.IsChecked = _cfg.HideWindowFromCapture;
+        MinimizeCheck.IsChecked = _cfg.MinimizeOnRecord;
         ClickFxCheck.IsChecked = _cfg.ClickEffect;
         ClickSoundCheck.IsChecked = _cfg.ClickSound;
         SysAudioCheck.IsChecked = _cfg.RecordSystemAudio;
@@ -90,7 +93,7 @@ public partial class MainWindow : Window
         _liveTimer.Tick += (_, _) => LiveTick();
         Loaded += async (_, _) => await InitAsync();
         Closing += Window_Closing;
-        Closed += (_, _) => { _liveTimer.Stop(); StopMicTest(); StopClickFx(); _hook.Dispose(); };
+        Closed += (_, _) => { _liveTimer.Stop(); StopMicTest(); StopClickFx(); _hook.Dispose(); try { _toolbar?.Close(); } catch { } };
         Closed += (_, _) => SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
         SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
     }
@@ -268,6 +271,7 @@ public partial class MainWindow : Window
         _cfg.Quality = QEco.IsChecked == true ? VideoQuality.Economy : QHigh.IsChecked == true ? VideoQuality.High : VideoQuality.Balanced;
         _cfg.UseHardware = HwCheck.IsChecked == true;
         _cfg.HideWindowFromCapture = HideCheck.IsChecked == true;
+        _cfg.MinimizeOnRecord = MinimizeCheck.IsChecked == true;
         _cfg.ClickEffect = ClickFxCheck.IsChecked == true;
         _cfg.ClickSound = ClickSoundCheck.IsChecked == true;
         _cfg.RecordSystemAudio = SysAudioCheck.IsChecked == true;
@@ -407,6 +411,7 @@ public partial class MainWindow : Window
     {
         if (_rec == null) return;
         TimerText.Text = TimeFormat.Format(_rec.Elapsed);
+        _toolbar?.SetTime(TimerText.Text);
         if (_rec.State != RecState.Recording) return;
         if (++_ticks % 50 == 0) _ = CheckDiskAsync();
     }
@@ -489,6 +494,36 @@ public partial class MainWindow : Window
                 _timer.Stop(); ClearCaptureExclusion(); StopClickFx(); TimerText.Text = "00:00:00";
                 StatusDot.Fill = red; StatusText.Text = "Erro de gravação"; Title = "TelaRec";
                 RecButton.IsEnabled = _monitors.Count > 0; break;
+        }
+    
+        UpdateToolbar(s);
+    }
+
+    /// <summary>Mostra/atualiza/fecha a barra flutuante conforme o estado da gravação.</summary>
+    private void UpdateToolbar(RecState s)
+    {
+        if (s is RecState.Starting or RecState.Recording or RecState.Paused or RecState.Finalizing)
+        {
+            if (_toolbar == null && _recTarget != null)
+            {
+                _toolbar = new RecordingToolbar(_recTarget);
+                _toolbar.PauseToggleClicked += () => PauseButton_Click(this, new RoutedEventArgs());
+                _toolbar.StopClicked += () => StopButton_Click(this, new RoutedEventArgs());
+                _toolbar.Show();
+                // Os controles passam para a barra: a janela principal sai da frente (e volta sozinha ao terminar).
+                if (!_resuming && s == RecState.Starting && MinimizeCheck.IsChecked == true && WindowState != WindowState.Minimized)
+                {
+                    _minimizedByUs = true;
+                    WindowState = WindowState.Minimized;
+                }
+            }
+            _toolbar?.SetMode(s, _resuming);
+            _toolbar?.SetTime(TimerText.Text);
+        }
+        else
+        {
+            if (_toolbar != null) { try { _toolbar.Close(); } catch { } _toolbar = null; }
+            if (_minimizedByUs) { _minimizedByUs = false; WindowState = WindowState.Normal; }
         }
     }
 
@@ -724,6 +759,7 @@ public partial class MainWindow : Window
         var mon = _recTarget;
         if (mon == null || _overlay == null) return;
         if (x < mon.X || y < mon.Y || x >= mon.X + mon.Width || y >= mon.Y + mon.Height) return; // só o monitor gravado
+        if (_toolbar != null && _toolbar.PhysicalBounds.Contains(x, y)) return;                   // cliques na barra flutuante não geram efeito
         Dispatcher.InvokeAsync(() =>
         {
             _overlay?.Ripple(x, y, left);
