@@ -102,3 +102,10 @@ Marque conforme for validando. Para cada item anote Windows, GPU e resultado.
 | 92 | Clicar nas teclas da barra não gera círculo/som do efeito de clique e não tira o foco do aplicativo em uso | ☐ |
 | 93 | Com "Minimizar esta janela ao gravar" desligada, a janela principal permanece como está | ☐ |
 | 94 | Gravar outro monitor que não o da janela principal: a barra aparece no monitor gravado | ☐ |
+| 95 | A barra está encostada literalmente no topo do monitor (sem vão) e tem cerca de metade da altura da versão anterior | ☐ |
+| 96 | Marcar "Manter a barra fixa": a barra aparece em "PRONTO" no topo do monitor escolhido, sem gravar | ☐ |
+| 97 | Minimizar o programa e clicar em ● na barra: a gravação começa; pausar/continuar/parar funcionam pela barra | ☐ |
+| 98 | Ao parar, a janela de nome aparece (programa volta temporariamente), e depois do fluxo o programa minimiza de novo e a barra fica em "PRONTO" | ☐ |
+| 99 | Trocar o monitor escolhido (com o programa aberto): a barra fixa muda para o novo monitor | ☐ |
+| 100 | Desmarcar a opção sem gravar: a barra some; com a opção desligada ela só aparece durante a gravação | ☐ |
+| 101 | A barra em "PRONTO" também não aparece em vídeos gravados nem gera efeito de clique ao ser clicada | ☐ |

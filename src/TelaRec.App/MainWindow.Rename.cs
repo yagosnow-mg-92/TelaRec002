@@ -9,6 +9,18 @@ public partial class MainWindow
 {
     private async Task AfterRecordingAsync(string path)
     {
+        try { await AfterRecordingCoreAsync(path); }
+        finally
+        {
+            // Gravação iniciada pela barra com o programa minimizado: terminado o fluxo, volta a minimizar.
+            if (_wasMinimizedAtStart && PinToolbarCheck.IsChecked == true && _toolbar != null && WindowState != WindowState.Minimized)
+                WindowState = WindowState.Minimized;
+            _wasMinimizedAtStart = false;
+        }
+    }
+
+    private async Task AfterRecordingCoreAsync(string path)
+    {
         // 1) Drive: pergunta (ou envia direto, no modo automático) e escolhe a pasta, ANTES do nome do arquivo.
         DriveTarget? target = null;
         bool sendToDrive = false;

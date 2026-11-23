@@ -15,6 +15,8 @@ internal struct BITMAPINFOHEADER
 
 internal static class NativeMethods
 {
+    [DllImport("gdi32.dll")] internal static extern IntPtr CreateRoundRectRgn(int l, int t, int r, int b, int w, int h);
+    [DllImport("user32.dll")] internal static extern int SetWindowRgn(IntPtr hWnd, IntPtr hRgn, bool redraw);
     [DllImport("dwmapi.dll")] internal static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
     [DllImport("user32.dll")] internal static extern int GetWindowLong(IntPtr hWnd, int nIndex);
     [DllImport("user32.dll")] internal static extern int SetWindowLong(IntPtr hWnd, int nIndex, int dwNewLong);

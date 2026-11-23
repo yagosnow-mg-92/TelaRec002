@@ -93,6 +93,8 @@ public sealed class AppSettings
     public bool HideWindowFromCapture { get; set; } = true;
     /// <summary>Minimiza a janela principal ao iniciar a gravação (os controles ficam na barra flutuante).</summary>
     public bool MinimizeOnRecord { get; set; } = true;
+    /// <summary>Mantém a barra de gravação fixa no topo do monitor escolhido, mesmo sem gravar (com botão de iniciar).</summary>
+    public bool PinToolbar { get; set; } = false;
     public bool ClickEffect { get; set; } = false;
     public bool ClickSound { get; set; } = true;
     public bool RecordSystemAudio { get; set; } = false;

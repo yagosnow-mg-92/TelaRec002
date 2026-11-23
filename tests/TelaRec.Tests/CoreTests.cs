@@ -365,6 +365,19 @@ public class DriveTests
     }
 
     [Fact]
+    public void Settings_PinToolbar_DefaultsOffAndPersists()
+    {
+        Assert.False(new AppSettings().PinToolbar);
+        var path = Path.Combine(Path.GetTempPath(), "telarec-pin-" + Guid.NewGuid().ToString("N") + ".json");
+        try
+        {
+            new AppSettings { PinToolbar = true }.Save(path);
+            Assert.True(AppSettings.Load(path).PinToolbar);
+        }
+        finally { try { File.Delete(path); } catch { } }
+    }
+
+    [Fact]
     public void Settings_MinimizeOnRecord_DefaultsOnAndPersists()
     {
         Assert.True(new AppSettings().MinimizeOnRecord);

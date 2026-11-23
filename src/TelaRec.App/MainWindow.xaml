@@ -41,6 +41,9 @@
                                     Height="34" MinWidth="120" FontSize="13" HorizontalAlignment="Right"
                                     VerticalAlignment="Center" Click="RefreshButton_Click"/>
                         </Grid>
+                        <CheckBox x:Name="PinToolbarCheck" Margin="0,12,0,0" Foreground="{StaticResource Text}" Click="PinToolbar_Click"
+                                  Content="Manter a barra de gravação fixa no topo desta tela (mesmo com o programa minimizado)"
+                                  ToolTip="Mostra uma barra compacta no topo do monitor escolhido, com o botão de iniciar a gravação. Dá para minimizar o programa e gravar só por ela."/>
                     </StackPanel>
                 </Border>
 

@@ -22,9 +22,12 @@ O executável tem ~60–80 MB porque embute o .NET e o FFmpeg. Na primeira execu
 3. Escolha pasta, nome (opcional), FPS e qualidade.
 4. **Iniciar gravação** → **Pausar/Retomar** → **Finalizar**. O tempo em pausa não entra no vídeo.
 
-## Barra flutuante durante a gravação
+## Barra de gravação (flutuante)
 
-Ao iniciar, aparece uma **barra fixa, centralizada no topo do monitor que está sendo gravado**, com: indicador **GRAVANDO / PAUSADO** (ponto vermelho piscando ao gravar, âmbar ao pausar), o **cronômetro**, um botão grande de **pausar** (⏸) que vira **continuar** (▶) quando pausado, e um botão grande de **parar** (⏹). Ao parar, a barra some e o fluxo normal continua (nome do arquivo → Drive). A barra **não aparece no vídeo** (usa a exclusão de captura do Windows 10 2004+/11), **não rouba o foco** do que você estiver fazendo e **não gera efeito de clique** quando você clica nela. Por padrão a janela principal é **minimizada** ao gravar e volta sozinha ao terminar (opção "Minimizar esta janela ao gravar", em Opções). Cantos arredondados só no Windows 11.
+Uma barra **compacta, encostada no topo do monitor escolhido e centralizada**, com o indicador **PRONTO / GRAVANDO / PAUSADO**, o **cronômetro** e botões redondos: **gravar** (●, quando parado), **pausar** (⏸, que vira **continuar** ▶ quando pausado) e **parar** (⏹). Ela **não aparece no vídeo** (usa a exclusão de captura do Windows 10 2004+/11), **não rouba o foco** do que você estiver fazendo e **não gera efeito de clique** quando você clica nela. Cantos arredondados só embaixo (a barra encosta na borda de cima).
+
+- **Durante a gravação** a barra aparece sozinha. Por padrão a janela principal é **minimizada** ao gravar e volta ao terminar (opção "Minimizar esta janela ao gravar", em Opções).
+- **Barra fixa (opção):** marque **"Manter a barra de gravação fixa no topo desta tela"** (no cartão "Tela a gravar") e a barra fica **sempre visível** no monitor escolhido, mesmo sem gravar e com o programa minimizado. Clique em ● para iniciar a gravação direto por ela; ao terminar, depois da janela de nome (e do Drive, se for o caso), o programa minimizado volta a minimizar e a barra continua lá, em "PRONTO". A barra acompanha o monitor escolhido nas configurações (para trocar de tela, restaure o programa).
 
 ## Nome do arquivo ao terminar a gravação
 

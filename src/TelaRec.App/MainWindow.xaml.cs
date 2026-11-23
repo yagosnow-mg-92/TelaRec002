@@ -36,6 +36,7 @@ public partial class MainWindow : Window
     private bool _resuming;
     private RecordingToolbar? _toolbar;
     private bool _minimizedByUs;
+    private bool _wasMinimizedAtStart;
     private readonly Dictionary<string, Border> _cards = new();
     private readonly MouseHook _hook = new();
     private ClickOverlay? _overlay;
@@ -66,6 +67,7 @@ public partial class MainWindow : Window
         HwCheck.IsChecked = _cfg.UseHardware;
         HideCheck.IsChecked = _cfg.HideWindowFromCapture;
         MinimizeCheck.IsChecked = _cfg.MinimizeOnRecord;
+        PinToolbarCheck.IsChecked = _cfg.PinToolbar;
         ClickFxCheck.IsChecked = _cfg.ClickEffect;
         ClickSoundCheck.IsChecked = _cfg.ClickSound;
         SysAudioCheck.IsChecked = _cfg.RecordSystemAudio;
@@ -111,6 +113,7 @@ public partial class MainWindow : Window
         _rec.Interrupted += r => Dispatcher.InvokeAsync(() => ShowResult(r));
 
         RefreshMonitors();
+        UpdatePinnedToolbar();
         _liveTimer.Start();
         ShowInfo("Verificando aceleração de hardware…");
         _hw = await EncoderProbe.DetectBestAsync(path);
@@ -199,6 +202,7 @@ public partial class MainWindow : Window
         var m = _selected;
         SelectedInfo.Text = $"{m.Name}  ·  {m.Resolution}" + (m.IsPrimary ? "  ·  Principal" : "");
         SelectedInfo2.Text = $"{m.Orientation}  ·  Escala do Windows {m.DpiPercent}%  ·  Posição ({m.X}, {m.Y})  ·  {_monitors.Count} monitor(es) detectado(s)";
+        UpdatePinnedToolbar();   // a barra fixa acompanha o monitor escolhido
     }
 
     private void DrawMonitors()
@@ -272,6 +276,7 @@ public partial class MainWindow : Window
         _cfg.UseHardware = HwCheck.IsChecked == true;
         _cfg.HideWindowFromCapture = HideCheck.IsChecked == true;
         _cfg.MinimizeOnRecord = MinimizeCheck.IsChecked == true;
+        _cfg.PinToolbar = PinToolbarCheck.IsChecked == true;
         _cfg.ClickEffect = ClickFxCheck.IsChecked == true;
         _cfg.ClickSound = ClickSoundCheck.IsChecked == true;
         _cfg.RecordSystemAudio = SysAudioCheck.IsChecked == true;
@@ -319,6 +324,7 @@ public partial class MainWindow : Window
         StopClickFx();
         if (withLog) ShowErrorWithLog(message); else ShowError(message);
         ApplyState(withLog ? RecState.Error : RecState.Ready);
+        BringBackIfMinimized();
     }
 
     private async void RecButton_Click(object sender, RoutedEventArgs e)
@@ -327,6 +333,7 @@ public partial class MainWindow : Window
         _busy = true;
         try
         {
+            _wasMinimizedAtStart = WindowState == WindowState.Minimized;
             var cfg = ReadSettings();
             if (string.IsNullOrWhiteSpace(cfg.OutputFolder)) { ShowError("Escolha uma pasta para salvar os vídeos."); return; }
 
@@ -499,31 +506,74 @@ public partial class MainWindow : Window
         UpdateToolbar(s);
     }
 
+    private RecordingToolbar CreateToolbar(MonitorInfo mon)
+    {
+        var t = new RecordingToolbar(mon);
+        t.RecordClicked += () => RecButton_Click(this, new RoutedEventArgs());
+        t.PauseToggleClicked += () => PauseButton_Click(this, new RoutedEventArgs());
+        t.StopClicked += () => StopButton_Click(this, new RoutedEventArgs());
+        t.Show();
+        return t;
+    }
+
+    /// <summary>
+    /// Barra fixa (opção do usuário): fica no topo do monitor escolhido mesmo sem gravar, com o botão de iniciar.
+    /// Sem a opção, a barra só existe durante a gravação.
+    /// </summary>
+    private void UpdatePinnedToolbar()
+    {
+        var st = _rec?.State ?? RecState.Ready;
+        if (st is RecState.Starting or RecState.Recording or RecState.Paused or RecState.Finalizing) return;   // em uso: UpdateToolbar cuida
+
+        if (PinToolbarCheck.IsChecked == true && _selected != null && _rec != null)
+        {
+            if (_toolbar == null) _toolbar = CreateToolbar(_selected); else _toolbar.MoveTo(_selected);
+            _toolbar.SetMode(RecState.Ready, false);
+            _toolbar.SetTime("00:00:00");
+        }
+        else if (_toolbar != null)
+        {
+            try { _toolbar.Close(); } catch { }
+            _toolbar = null;
+        }
+    }
+
+    private void PinToolbar_Click(object sender, RoutedEventArgs e)
+    {
+        ReadSettings().Save(_settingsPath);
+        UpdatePinnedToolbar();
+    }
+
+    /// <summary>Se o programa estava minimizado (gravação iniciada pela barra), traz a janela de volta para mostrar mensagens e janelas.</summary>
+    private void BringBackIfMinimized()
+    {
+        if (WindowState != WindowState.Minimized) return;
+        WindowState = WindowState.Normal;
+        Activate();
+    }
+
     /// <summary>Mostra/atualiza/fecha a barra flutuante conforme o estado da gravação.</summary>
     private void UpdateToolbar(RecState s)
     {
         if (s is RecState.Starting or RecState.Recording or RecState.Paused or RecState.Finalizing)
         {
-            if (_toolbar == null && _recTarget != null)
+            var target = _recTarget ?? _selected;
+            if (_toolbar == null && target != null) _toolbar = CreateToolbar(target);
+            else if (_toolbar != null && _recTarget != null) _toolbar.MoveTo(_recTarget);
+
+            // Os controles passam para a barra: a janela principal sai da frente (e volta sozinha ao terminar).
+            if (!_resuming && s == RecState.Starting && MinimizeCheck.IsChecked == true && WindowState != WindowState.Minimized)
             {
-                _toolbar = new RecordingToolbar(_recTarget);
-                _toolbar.PauseToggleClicked += () => PauseButton_Click(this, new RoutedEventArgs());
-                _toolbar.StopClicked += () => StopButton_Click(this, new RoutedEventArgs());
-                _toolbar.Show();
-                // Os controles passam para a barra: a janela principal sai da frente (e volta sozinha ao terminar).
-                if (!_resuming && s == RecState.Starting && MinimizeCheck.IsChecked == true && WindowState != WindowState.Minimized)
-                {
-                    _minimizedByUs = true;
-                    WindowState = WindowState.Minimized;
-                }
+                _minimizedByUs = true;
+                WindowState = WindowState.Minimized;
             }
             _toolbar?.SetMode(s, _resuming);
             _toolbar?.SetTime(TimerText.Text);
         }
         else
         {
-            if (_toolbar != null) { try { _toolbar.Close(); } catch { } _toolbar = null; }
             if (_minimizedByUs) { _minimizedByUs = false; WindowState = WindowState.Normal; }
+            UpdatePinnedToolbar();   // com a opção ligada volta ao modo "PRONTO"; senão a barra fecha
         }
     }
 
@@ -814,6 +864,7 @@ public partial class MainWindow : Window
         _folderToOpen = r.FilePath != null ? System.IO.Path.GetDirectoryName(r.FilePath) : r.KeptFolder;
         _logPath = r.LogPath;
         bool showLog = !r.Success && r.LogPath != null;
+        if (!r.Success) BringBackIfMinimized();
         SetMessage(r.Message, (Brush)FindResource(r.Success ? "Green" : "Red"), _folderToOpen != null || showLog);
         OpenFolderButton.Visibility = _folderToOpen != null ? Visibility.Visible : Visibility.Collapsed;
         LogButton.Visibility = showLog ? Visibility.Visible : Visibility.Collapsed;
